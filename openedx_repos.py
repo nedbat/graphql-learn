@@ -9,8 +9,8 @@ client = GraphqlClient(endpoint="https://api.github.com/graphql")
 TOKEN = os.environ.get("GITHUB_TOKEN", "")
 
 QUERY = """\
-    query {
-      organization(login: "edx") {
+    query ($organization: String!) {
+      organization(login: $organization) {
         repositories(first: 100, privacy: PUBLIC) {
           nodes {
             name
@@ -27,8 +27,9 @@ QUERY = """\
     }
 """
 
+vars = {"organization": "edx"}
 data = client.execute(
-            query=QUERY,
+            query=QUERY, variables=vars,
             headers={"Authorization": f"Bearer {TOKEN}"},
         )
 repos = glom(data, "data.organization.repositories.nodes")
