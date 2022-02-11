@@ -15,7 +15,7 @@ TOKEN = os.environ.get("GITHUB_TOKEN", "")
 # https://graphql.org/learn/queries/#inline-fragments
 
 QUERY = """\
-    query ($organization: String!, $after: String) {
+    query ($organization: String!, $after: String, $openedx_yaml: String) {
       organization(login: $organization) {
         repositories(
           first: 100,
@@ -29,7 +29,7 @@ QUERY = """\
           nodes {
             name
             url
-            content: object(expression: "HEAD:openedx.yaml") {
+            content: object(expression: $openedx_yaml) {
               ... on Blob {
                 text
               }
@@ -40,9 +40,11 @@ QUERY = """\
     }
 """
 
+#branch = "open-release/maple.master"
+branch = "HEAD"
 repos = []
 for org in ["edx", "openedx"]:
-    vars = {"organization": org}
+    vars = {"organization": org, "openedx_yaml": f"{branch}:openedx.yaml"}
     after = None
     while True:
         data = client.execute(
