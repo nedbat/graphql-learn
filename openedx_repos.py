@@ -11,7 +11,7 @@ TOKEN = os.environ.get("GITHUB_TOKEN", "")
 QUERY = """\
     query ($organization: String!, $after: String) {
       organization(login: $organization) {
-        repositories(first: 10, privacy: PUBLIC, after: $after) {
+        repositories(first: 100, privacy: PUBLIC, after: $after) {
           pageInfo {
             hasNextPage
             endCursor
@@ -30,21 +30,25 @@ QUERY = """\
     }
 """
 
-vars = {"organization": "edx"}
-after = None
 repos = []
-while True:
-    data = client.execute(
-            query=QUERY, variables=vars,
-            headers={"Authorization": f"Bearer {TOKEN}"},
-        )
-    repo_data = glom(data, "data.organization.repositories")
-    nodes = repo_data["nodes"]
-    repos.extend(n for n in nodes if n["content"])
-    print(f'{len(repos)} repos')
-    if not repo_data["pageInfo"]["hasNextPage"]:
-        break
-    vars["after"] = repo_data["pageInfo"]["endCursor"]
+for org in ["edx", "openedx"]:
+    vars = {"organization": org}
+    after = None
+    while True:
+        data = client.execute(
+                query=QUERY, variables=vars,
+                headers={"Authorization": f"Bearer {TOKEN}"},
+            )
+        if "errors" in data:
+            print(data["errors"])
+            break
+        repo_data = glom(data, "data.organization.repositories")
+        nodes = repo_data["nodes"]
+        repos.extend(n for n in nodes if n["content"])
+        print(f'{len(repos)} repos')
+        if not repo_data["pageInfo"]["hasNextPage"]:
+            break
+        vars["after"] = repo_data["pageInfo"]["endCursor"]
 
 print(len(repos))
 print(repos[0])
