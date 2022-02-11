@@ -9,12 +9,15 @@ client = GraphqlClient(endpoint="https://api.github.com/graphql")
 TOKEN = os.environ.get("GITHUB_TOKEN", "")
 
 QUERY = """\
-    query ($organization: String!) {
+    query ($organization: String!, $after: String) {
       organization(login: $organization) {
-        repositories(first: 100, privacy: PUBLIC) {
+        repositories(first: 10, privacy: PUBLIC, after: $after) {
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
           nodes {
             name
-            description
             url
             content: object(expression: "master:openedx.yaml") {
               ... on Blob {
@@ -28,9 +31,18 @@ QUERY = """\
 """
 
 vars = {"organization": "edx"}
-data = client.execute(
+after = None
+nodes = []
+while True:
+    data = client.execute(
             query=QUERY, variables=vars,
             headers={"Authorization": f"Bearer {TOKEN}"},
         )
-repos = glom(data, "data.organization.repositories.nodes")
-print(len(repos))
+    repos = glom(data, "data.organization.repositories")
+    nodes.extend(repos["nodes"])
+    print(f'{len(nodes)} nodes, {repos["pageInfo"]["hasNextPage"]=}')
+    if not repos["pageInfo"]["hasNextPage"]:
+        break
+    vars["after"] = repos["pageInfo"]["endCursor"]
+
+print(len(nodes))
