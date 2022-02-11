@@ -32,17 +32,19 @@ QUERY = """\
 
 vars = {"organization": "edx"}
 after = None
-nodes = []
+repos = []
 while True:
     data = client.execute(
             query=QUERY, variables=vars,
             headers={"Authorization": f"Bearer {TOKEN}"},
         )
-    repos = glom(data, "data.organization.repositories")
-    nodes.extend(repos["nodes"])
-    print(f'{len(nodes)} nodes, {repos["pageInfo"]["hasNextPage"]=}')
-    if not repos["pageInfo"]["hasNextPage"]:
+    repo_data = glom(data, "data.organization.repositories")
+    nodes = repo_data["nodes"]
+    repos.extend(n for n in nodes if n["content"])
+    print(f'{len(repos)} repos')
+    if not repo_data["pageInfo"]["hasNextPage"]:
         break
-    vars["after"] = repos["pageInfo"]["endCursor"]
+    vars["after"] = repo_data["pageInfo"]["endCursor"]
 
-print(len(nodes))
+print(len(repos))
+print(repos[0])
