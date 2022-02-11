@@ -1,2 +1,3 @@
-python-graphql-client
 glom
+python-graphql-client
+pyyaml

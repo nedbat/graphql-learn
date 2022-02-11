@@ -1,7 +1,10 @@
-# cribbed from https://github.com/simonw/simonw/blob/main/build_readme.py
-#
+"""
+Find repos with openedx.yaml files and see what they say about openedx-release.
+"""
+
 import os
 
+import yaml
 from glom import glom
 from python_graphql_client import GraphqlClient
 
@@ -11,7 +14,11 @@ TOKEN = os.environ.get("GITHUB_TOKEN", "")
 QUERY = """\
     query ($organization: String!, $after: String) {
       organization(login: $organization) {
-        repositories(first: 100, privacy: PUBLIC, after: $after) {
+        repositories(
+          first: 100,
+          privacy: PUBLIC,
+          after: $after,
+        ) {
           pageInfo {
             hasNextPage
             endCursor
@@ -50,5 +57,12 @@ for org in ["edx", "openedx"]:
             break
         vars["after"] = repo_data["pageInfo"]["endCursor"]
 
-print(len(repos))
-print(repos[0])
+release_repos = []
+for repo in repos:
+    openedx_data = yaml.safe_load(repo["content"]["text"])
+    if openedx_data and (rel := openedx_data.get("openedx-release")):
+        maybe = rel.get("maybe", False)
+        print(repo["url"], "MAYBE" if maybe else rel["ref"])
+        release_repos.append(repo)
+
+print(len(release_repos))
