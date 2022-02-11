@@ -11,6 +11,9 @@ from python_graphql_client import GraphqlClient
 client = GraphqlClient(endpoint="https://api.github.com/graphql")
 TOKEN = os.environ.get("GITHUB_TOKEN", "")
 
+# ... on Blob  is an inline fragment:
+# https://graphql.org/learn/queries/#inline-fragments
+
 QUERY = """\
     query ($organization: String!, $after: String) {
       organization(login: $organization) {
@@ -26,7 +29,7 @@ QUERY = """\
           nodes {
             name
             url
-            content: object(expression: "master:openedx.yaml") {
+            content: object(expression: "HEAD:openedx.yaml") {
               ... on Blob {
                 text
               }
