@@ -16,55 +16,42 @@ def json_out(data):
         json.dump(data, j, indent=4)
 
 QUERY = """\
-    {
-      search(query: "org:openedx is:issue created:>2022-02-01", type: ISSUE, last: 10) {
-        edges {
-          node {
-            ... on Issue {
-              url
-              title
-              createdAt
-              body
-              comments (last: 10) {
-                nodes {
-                    body
-                }
-              }
-            }
+query getIssuesWithComments($owner: String!, $name: String!) {
+  repository(owner: $owner, name: $name) {
+    issues (last: 50, filterBy: { since: "2022-02-01T00:00:00" } ) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
+        url
+        title
+        createdAt
+        body
+        comments (last: 20) {
+          totalCount
+          nodes {
+            body
           }
         }
       }
     }
+  }
+}
 """
 
-QUERY = """\
-    query {
-      repository(owner: "nedbat", name: "coveragepy") {
-        issues (last: 10) {
-            pageInfo {
-              hasNextPage
-              endCursor
-            }
-            nodes {
-              url
-              title
-              createdAt
-              body
-              comments (last: 10) {
-                nodes {
-                    body
-                }
-              }
-            }
-        }
-      }
-    }
-"""
+def gql_execute(query, variables=None):
+    data = client.execute(query=query, variables=variables)
+    json_out(data)
+    if "errors" in data:
+        err = data["errors"][0]
+        loc = err["locations"][0]
+        raise Exception(
+            f"GraphQl error: {err['message']} " +
+            f"@{'.'.join(err['path'])}, " +
+            f"line {loc['line']} " +
+            f"column {loc['column']}"
+        )
+    return data
 
-vars = {}
-data = client.execute(
-        query=QUERY, variables=vars,
-        #headers={"Authorization": f"Bearer {TOKEN}"},
-    )
-#show_json(data)
-json_out(data)
+gql_execute(query=QUERY, variables={"owner": "nedbat", "name": "coveragepy"})
