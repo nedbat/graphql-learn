@@ -1,3 +1,4 @@
+import json
 import os
 
 import yaml
@@ -6,6 +7,13 @@ from python_graphql_client import GraphqlClient
 
 client = GraphqlClient(endpoint="https://api.github.com/graphql")
 TOKEN = os.environ.get("GITHUB_TOKEN", "")
+
+def show_json(data):
+    print(json.dumps(data, indent=4))
+
+def json_out(data):
+    with open("out.json", "w") as j:
+        json.dump(data, j, indent=4)
 
 QUERY = """\
     {
@@ -33,8 +41,11 @@ QUERY = """\
     query {
       repository(owner: "nedbat", name: "coveragepy") {
         issues (last: 10) {
-          edges {
-          node {
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
+            nodes {
               url
               title
               createdAt
@@ -44,8 +55,7 @@ QUERY = """\
                     body
                 }
               }
-          }
-        }
+            }
         }
       }
     }
@@ -54,6 +64,7 @@ QUERY = """\
 vars = {}
 data = client.execute(
         query=QUERY, variables=vars,
-        headers={"Authorization": f"Bearer {TOKEN}"},
+        #headers={"Authorization": f"Bearer {TOKEN}"},
     )
-import pprint; pprint.pprint(data)
+#show_json(data)
+json_out(data)
