@@ -29,7 +29,7 @@ QUERY = """\
           nodes {
             name
             url
-            content: object(expression: $openedx_yaml) {
+            openedx_yaml: object(expression: $openedx_yaml) {
               ... on Blob {
                 text
               }
@@ -56,7 +56,7 @@ for org in ["edx", "openedx"]:
             break
         repo_data = glom(data, "data.organization.repositories")
         nodes = repo_data["nodes"]
-        repos.extend(n for n in nodes if n["content"])
+        repos.extend(n for n in nodes if n["openedx_yaml"])
         print(f'{len(repos)} repos')
         if not repo_data["pageInfo"]["hasNextPage"]:
             break
@@ -64,7 +64,7 @@ for org in ["edx", "openedx"]:
 
 release_repos = []
 for repo in repos:
-    openedx_data = yaml.safe_load(repo["content"]["text"])
+    openedx_data = yaml.safe_load(repo["openedx_yaml"]["text"])
     if openedx_data and (rel := openedx_data.get("openedx-release")):
         maybe = rel.get("maybe", False)
         print(repo["url"], "MAYBE" if maybe else rel["ref"])
