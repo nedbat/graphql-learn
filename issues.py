@@ -1,12 +1,15 @@
+import asyncio
 import json
 import os
 
-import yaml
 from glom import glom
 from python_graphql_client import GraphqlClient
 
-client = GraphqlClient(endpoint="https://api.github.com/graphql")
 TOKEN = os.environ.get("GITHUB_TOKEN", "")
+client = GraphqlClient(
+    endpoint="https://api.github.com/graphql",
+    headers={"Authorization": f"Bearer {TOKEN}"},
+)
 
 def show_json(data):
     print(json.dumps(data, indent=4))
@@ -40,9 +43,11 @@ query getIssuesWithComments($owner: String!, $name: String!) {
 }
 """
 
-def gql_execute(query, variables=None):
-    data = client.execute(query=query, variables=variables)
+async def gql_execute(query, variables=None):
+    data = await client.execute_async(query=query, variables=variables)
     json_out(data)
+    if "message" in data:
+        raise Exception(data["message"])
     if "errors" in data:
         err = data["errors"][0]
         loc = err["locations"][0]
@@ -54,4 +59,4 @@ def gql_execute(query, variables=None):
         )
     return data
 
-gql_execute(query=QUERY, variables={"owner": "nedbat", "name": "coveragepy"})
+data = asyncio.run(gql_execute(query=QUERY, variables={"owner": "nedbat", "name": "coveragepy"}))
