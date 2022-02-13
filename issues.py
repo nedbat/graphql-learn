@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 import itertools
 import json
 import operator
@@ -32,6 +33,7 @@ fragment authorData on Actor {
 
 COMMENT_DATA_FRAGMENT = """\
 fragment commentData on IssueComment {
+    url
     body
     updatedAt
     author {
@@ -180,6 +182,11 @@ REPOS = [
     "edx/open-source-process-wg",
 ]
 
+def datetime_format(value, format="%H:%M %d-%m"):
+    """Format an ISO datetime string, for Jinja filtering."""
+    return datetime.datetime.fromisoformat(value.replace("Z", "+00:00")).strftime(format)
+
+
 async def main():
     tasks = [get_issues(repo, since=SINCE) for repo in REPOS]
     issuess = await asyncio.gather(*tasks)
@@ -187,6 +194,7 @@ async def main():
     with open("out_results.json", "w") as json_out:
         json.dump(results, json_out)
     jenv = jinja2.Environment(loader=jinja2.FileSystemLoader(Path(__file__).parent))
+    jenv.filters["datetime"] = datetime_format
     template = jenv.get_template("results.html.j2")
     with open("results.html", "w") as html_out:
         html_out.write(template.render(results=results))

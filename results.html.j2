@@ -10,8 +10,12 @@
             [{{ issue.author.login }}]
             <ul>
               {% for comment in issue.comments.nodes -%}
-                <li>[{{ comment.author.login }}]
-                  {{ comment.body|trim|truncate(120) }}</li>
+                <li>
+                  {# <img src="{{comment.author.avatarUrl}}&size=20"/> #}
+                  <a href="{{ comment.url }}">{{ comment.updatedAt|datetime("%m-%d %H:%M") }}</a>
+                  [{{ comment.author.login }}]
+                  {{ comment.body|trim|truncate(120) }}
+                </li>
               {% endfor %}
             </ul>
           </li>
