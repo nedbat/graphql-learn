@@ -1,22 +1,47 @@
 <!DOCTYPE html>
 <head>
   <title>Issue updates</title>
+  <style>
+  body {
+    font-family: sans-serif;
+  }
+  ul {
+    padding-left: 1em;
+  }
+  ul.issue {
+    padding-left: 0em;
+    list-style-type: none;
+    margin-bottom: 1em;
+  }
+  ul.issue > li {
+    margin: .5em 0;
+  }
+  ul.issue p {
+    margin: 0 0 0 2em;
+  }
+  ul.comment {
+    padding-left: 3em;
+  }
+  .icon {
+    display: inline-block;
+    width: .75em;
+  }
+  </style>
 <body>
 <h1>Issue updates since {{ since|datetime("%Y-%m-%d") }}</h1>
-<ul>
+<ul class="repo">
   {% for kind, thing, issues in results -%}
     <li>{{ kind }} {{thing}}
-      <ul>
+      <ul class="issue">
         {% for issue in issues -%}
-          <li class="issue {{ issue.state }}">
-            {% if issue.reasonCreated %}&Star;{% else %}&nbsp;&nbsp;{% endif %}
-            {% if issue.reasonClosed %}&times;{% else %}&nbsp;{% endif %}
+          <li class="{{ issue.state|lower }}">
+            <span class="icon created">{% if issue.reasonCreated %}&Star;{% else %}&ndash;{% endif %}</span>
+            <span class="icon closed">{% if issue.reasonClosed %}&times;{% else %}&ndash;{% endif %}</span>
             <a href="{{ issue.url }}">{{ issue.number }}: {{issue.title}}</a>
             [{{ issue.author.login }}]
             {% if kind == "project" %}{{ issue.repository.nameWithOwner }}{% endif %}
-            <br>
-            {{ issue.body|truncate(120) }}
-            <ul>
+            <p>{{ issue.body|truncate(120) }}</p>
+            <ul class="comment">
               {% for comment in issue.comments.nodes -%}
                 <li>
                   {# <img src="{{comment.author.avatarUrl}}&size=20"/> #}
