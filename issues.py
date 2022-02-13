@@ -245,9 +245,9 @@ async def get_project_issues(org, number, since):
 SINCE = "2022-02-10T00:00:00"
 
 REPOS = [
-    "nedbat/coveragepy",
-    "openedx/tcril-engineering",
-    "edx/open-source-process-wg",
+    # "nedbat/coveragepy",
+    # "openedx/tcril-engineering",
+    # "edx/open-source-process-wg",
 ]
 
 PROJECTS = [

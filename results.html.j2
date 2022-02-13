@@ -42,7 +42,6 @@
 <ul class="repo">
   {% for thing, issues in results -%}
     <li>
-      {{ thing.kind }}
       <b><a href="{{ thing.url }}">
       {% if thing.kind == "repo" %}
         {{ thing.nameWithOwner }}
@@ -50,6 +49,7 @@
         {{ thing.title }}
       {% endif %}
       </a></b>
+      {{ thing.kind }}
       <ul class="issue">
         {% for issue in issues -%}
           <li class="{{ issue.state|lower }}">
