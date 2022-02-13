@@ -53,6 +53,7 @@ fragment issueData on Issue {
     state
     createdAt
     updatedAt
+    closedAt
     author {
         ...authorData
     }
@@ -168,9 +169,12 @@ async def get_issues(repo, since):
         iss["comments"]["nodes"] = comments
 
     # Trim comments to those since our since date.
+    # Why was this issue in the list?
     for iss in issues:
         comments = iss["comments"]
         comments["nodes"] = [c for c in comments["nodes"] if c["updatedAt"] >= since]
+        iss["reasonCreated"] = iss["createdAt"] > since
+        iss["reasonClosed"] = iss["closedAt"] and (iss["closedAt"] > since)
 
     issues.sort(key=operator.itemgetter("updatedAt"))
     return issues
@@ -182,7 +186,7 @@ REPOS = [
     "edx/open-source-process-wg",
 ]
 
-def datetime_format(value, format="%H:%M %d-%m"):
+def datetime_format(value, format="%m-%d %H:%M"):
     """Format an ISO datetime string, for Jinja filtering."""
     return datetime.datetime.fromisoformat(value.replace("Z", "+00:00")).strftime(format)
 
@@ -196,7 +200,8 @@ async def main():
     jenv = jinja2.Environment(loader=jinja2.FileSystemLoader(Path(__file__).parent))
     jenv.filters["datetime"] = datetime_format
     template = jenv.get_template("results.html.j2")
+    html = template.render(results=results, since=SINCE)
     with open("results.html", "w") as html_out:
-        html_out.write(template.render(results=results))
+        html_out.write(html)
 
 asyncio.run(main())

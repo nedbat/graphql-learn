@@ -1,11 +1,16 @@
 <!DOCTYPE html>
+<head>
+  <title>Issue updates</title>
 <body>
+<h1>Issue updates since {{ since|datetime("%Y-%m-%d") }}</h1>
 <ul>
   {% for kind, thing, issues in results -%}
     <li>{{ kind }} {{thing}}
       <ul>
         {% for issue in issues -%}
           <li class="issue {{ issue.state }}">
+            {% if issue.reasonCreated %}&Star;{% else %}&nbsp;&nbsp;{% endif %}
+            {% if issue.reasonClosed %}&times;{% else %}&nbsp;{% endif %}
             <a href="{{ issue.url }}">{{ issue.number }}: {{issue.title}}</a>
             [{{ issue.author.login }}]
             <br>
@@ -14,7 +19,7 @@
               {% for comment in issue.comments.nodes -%}
                 <li>
                   {# <img src="{{comment.author.avatarUrl}}&size=20"/> #}
-                  <a href="{{ comment.url }}">{{ comment.updatedAt|datetime("%m-%d %H:%M") }}</a>
+                  <a href="{{ comment.url }}">{{ comment.updatedAt|datetime() }}</a>
                   [{{ comment.author.login }}]
                   {{ comment.body|trim|truncate(120) }}
                 </li>
