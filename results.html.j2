@@ -13,6 +13,7 @@
             {% if issue.reasonClosed %}&times;{% else %}&nbsp;{% endif %}
             <a href="{{ issue.url }}">{{ issue.number }}: {{issue.title}}</a>
             [{{ issue.author.login }}]
+            {% if kind == "project" %}{{ issue.repository.nameWithOwner }}{% endif %}
             <br>
             {{ issue.body|truncate(120) }}
             <ul>

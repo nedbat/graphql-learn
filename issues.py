@@ -27,7 +27,7 @@ AUTHOR_DATA_FRAGMENT = """\
 fragment authorData on Actor {
     login
     url
-    avatarUrl
+    #avatarUrl
 }
 """
 
@@ -64,17 +64,33 @@ fragment issueData on Issue {
             ...commentData
         }
     }
+    projectNextItems(first: 100) {
+        nodes {
+            project {
+                owner {
+                    ... on User { login }
+                    ... on Organization { login }
+                }
+                number
+            }
+        }
+    }
+    timelineItems(last: 100) {
+        nodes {
+            __typename
+        }
+    }
 }
 """
 
-ISSUES_QUERY = """\
-query getIssues(
+REPO_ISSUES_QUERY = """\
+query getRepoIssues(
     $owner: String!
     $name: String!
     $since: String!
     $after: String
 ) {
-    repository(owner: $owner, name: $name) {
+    repository (owner: $owner, name: $name) {
         ...repoData
         issues (first: 100, filterBy: {since: $since}, after: $after) {
             pageInfo { hasNextPage, endCursor }
@@ -93,7 +109,7 @@ query getIssueComments(
     $number: Int!
     $after: String
 ) {
-    repository(owner: $owner, name: $name) {
+    repository (owner: $owner, name: $name) {
         issue (number: $number) {
             comments (first: 100, after: $after) {
                 pageInfo { hasNextPage, endCursor }
@@ -105,6 +121,34 @@ query getIssueComments(
     }
 }
 """ + AUTHOR_DATA_FRAGMENT + COMMENT_DATA_FRAGMENT
+
+PROJECT_ISSUES_QUERY = """\
+query getProjectIssues(
+    $org: String!
+    $projectNumber: Int!
+    $after: String
+) {
+    organization(login: $org) {
+        projectNext(number: $projectNumber) {
+            title
+            url
+            items (first: 100, after: $after) {
+                pageInfo { hasNextPage, endCursor }
+                nodes {
+                    content {
+                        ... on Issue {
+                            ...issueData
+                        }
+                        # ... on PullRequest {
+                        #     number
+                        # }
+                    }
+                }
+            }
+        }
+    }
+}
+""" + REPO_DATA_FRAGMENT + ISSUE_DATA_FRAGMENT + AUTHOR_DATA_FRAGMENT + COMMENT_DATA_FRAGMENT
 
 JSON_NAMES = (f"out_{i:02}.json" for i in itertools.count())
 
@@ -135,7 +179,7 @@ async def gql_execute(query, variables=None):
 
 async def gql_nodes(query, path, variables=None):
     """
-    Excecute a GraphQL query, and follow the pagination to get all the nodes.
+    Execute a GraphQL query, and follow the pagination to get all the nodes.
     """
     nodes = []
     vars = dict(variables)
@@ -148,14 +192,16 @@ async def gql_nodes(query, path, variables=None):
         vars["after"] = fetched["pageInfo"]["endCursor"]
     return nodes
 
-async def get_issues(repo, since):
+async def get_repo_issues(repo, since):
     """
     Get issues from a repo updated since a date, with comments since that date.
     """
     owner, name = repo.split("/")
     vars = dict(owner=owner, name=name, since=since)
-    issues = await gql_nodes(query=ISSUES_QUERY, path="repository.issues", variables=vars)
+    issues = await gql_nodes(query=REPO_ISSUES_QUERY, path="repository.issues", variables=vars)
+    return await populate_issues(issues, since)
 
+async def populate_issues(issues, since):
     # Need to get full comments.
     queried_issues = []
     issue_queries = []
@@ -174,17 +220,33 @@ async def get_issues(repo, since):
         comments = iss["comments"]
         comments["nodes"] = [c for c in comments["nodes"] if c["updatedAt"] >= since]
         iss["reasonCreated"] = iss["createdAt"] > since
-        iss["reasonClosed"] = iss["closedAt"] and (iss["closedAt"] > since)
+        iss["reasonClosed"] = bool(iss["closedAt"] and (iss["closedAt"] > since))
 
     issues.sort(key=operator.itemgetter("updatedAt"))
     return issues
 
+async def get_project_issues(org, number, since):
+    vars = dict(org=org, projectNumber=number)
+    project_data = await gql_nodes(query=PROJECT_ISSUES_QUERY, path="organization.projectNext.items", variables=vars)
+    json_save(project_data, "out_projects.json")
+    issues = [content for data in project_data if (content := data["content"])]
+    issues = [iss for iss in issues if iss["updatedAt"] > since]
+    return await populate_issues(issues, since)
+
+
 SINCE = "2022-02-10T00:00:00"
+
 REPOS = [
     "nedbat/coveragepy",
     "openedx/tcril-engineering",
     "edx/open-source-process-wg",
 ]
+
+PROJECTS = [
+    ("edx", 7),
+    ("openedx", 8),
+]
+
 
 def datetime_format(value, format="%m-%d %H:%M"):
     """Format an ISO datetime string, for Jinja filtering."""
@@ -197,13 +259,23 @@ def render_jinja(template_filename, **vars):
     html = template.render(**vars)
     return html
 
+def json_save(data, filename):
+    with open(filename, "w") as json_out:
+        json.dump(data, json_out, indent=4)
+
 
 async def main():
-    tasks = [get_issues(repo, since=SINCE) for repo in REPOS]
+    tasks = [
+        *(get_repo_issues(repo, since=SINCE) for repo in REPOS),
+        *(get_project_issues(org, number, SINCE) for org, number in PROJECTS),
+    ]
+    owners = [
+        *(("repo", repo) for repo in REPOS),
+        *(("project", f"{org}/{num}") for org, num in PROJECTS)
+    ]
     issuess = await asyncio.gather(*tasks)
-    results = [["repo", repo, issues] for repo, issues in zip(REPOS, issuess)]
-    with open("out_results.json", "w") as json_out:
-        json.dump(results, json_out)
+    results = [[*owner, issues] for owner, issues in zip(owners, issuess)]
+    json_save(results, "out_results.json")
     html = render_jinja("results.html.j2", results=results, since=SINCE)
     with open("results.html", "w") as html_out:
         html_out.write(html)
