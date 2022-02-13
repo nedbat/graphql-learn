@@ -3,12 +3,14 @@ import itertools
 import json
 import operator
 import os
+from pathlib import Path
 
-from glom import glom
-from python_graphql_client import GraphqlClient
+import glom
+import jinja2
+import python_graphql_client
 
 TOKEN = os.environ.get("GITHUB_TOKEN", "")
-client = GraphqlClient(
+client = python_graphql_client.GraphqlClient(
     endpoint="https://api.github.com/graphql",
     headers={"Authorization": f"Bearer {TOKEN}"},
 )
@@ -136,7 +138,7 @@ async def gql_nodes(query, path, variables=None):
     vars = dict(variables)
     while True:
         data = await gql_execute(query, vars)
-        fetched = glom(data, f"data.{path}")
+        fetched = glom.glom(data, f"data.{path}")
         nodes.extend(fetched["nodes"])
         if not fetched["pageInfo"]["hasNextPage"]:
             break
@@ -171,7 +173,7 @@ async def get_issues(repo, since):
     issues.sort(key=operator.itemgetter("updatedAt"))
     return issues
 
-SINCE = "2022-02-01T00:00:00"
+SINCE = "2022-02-10T00:00:00"
 REPOS = [
     "nedbat/coveragepy",
     "openedx/tcril-engineering",
@@ -181,10 +183,12 @@ REPOS = [
 async def main():
     tasks = [get_issues(repo, since=SINCE) for repo in REPOS]
     issuess = await asyncio.gather(*tasks)
-    for repo, issues in zip(REPOS, issuess):
-        print(f"{repo} has {len(issues)} issues to show")
+    results = [["repo", repo, issues] for repo, issues in zip(REPOS, issuess)]
+    with open("out_results.json", "w") as json_out:
+        json.dump(results, json_out)
+    jenv = jinja2.Environment(loader=jinja2.FileSystemLoader(Path(__file__).parent))
+    template = jenv.get_template("results.html.j2")
+    with open("results.html", "w") as html_out:
+        html_out.write(template.render(results=results))
 
 asyncio.run(main())
-# issues = asyncio.run(get_issues("nedbat/coveragepy", since="2022-01-01T00:00:00"))
-# for iss in issues:
-#     print(f"{iss['number']}: {iss['state']} {iss['updatedAt']} {iss['title']} [{len(iss['comments']['nodes'])}]")

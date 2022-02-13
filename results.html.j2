@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<body>
+<ul>
+  {% for kind, thing, issues in results -%}
+    <li>{{ kind }} {{thing}}
+      <ul>
+        {% for issue in issues -%}
+          <li class="issue {{ issue.state }}">
+            <a href="{{ issue.url }}">{{ issue.number }}: {{issue.title}}</a>
+            [{{ issue.author.login }}]
+            <ul>
+              {% for comment in issue.comments.nodes -%}
+                <li>[{{ comment.author.login }}]
+                  {{ comment.body|trim|truncate(120) }}</li>
+              {% endfor %}
+            </ul>
+          </li>
+        {% endfor %}
+      </ul>
+    </li>
+  {% endfor %}
+</ul>
