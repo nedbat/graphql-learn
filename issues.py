@@ -190,6 +190,13 @@ def datetime_format(value, format="%m-%d %H:%M"):
     """Format an ISO datetime string, for Jinja filtering."""
     return datetime.datetime.fromisoformat(value.replace("Z", "+00:00")).strftime(format)
 
+def render_jinja(template_filename, **vars):
+    jenv = jinja2.Environment(loader=jinja2.FileSystemLoader(Path(__file__).parent))
+    jenv.filters["datetime"] = datetime_format
+    template = jenv.get_template(template_filename)
+    html = template.render(**vars)
+    return html
+
 
 async def main():
     tasks = [get_issues(repo, since=SINCE) for repo in REPOS]
@@ -197,10 +204,7 @@ async def main():
     results = [["repo", repo, issues] for repo, issues in zip(REPOS, issuess)]
     with open("out_results.json", "w") as json_out:
         json.dump(results, json_out)
-    jenv = jinja2.Environment(loader=jinja2.FileSystemLoader(Path(__file__).parent))
-    jenv.filters["datetime"] = datetime_format
-    template = jenv.get_template("results.html.j2")
-    html = template.render(results=results, since=SINCE)
+    html = render_jinja("results.html.j2", results=results, since=SINCE)
     with open("results.html", "w") as html_out:
         html_out.write(html)
 
