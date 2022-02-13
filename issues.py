@@ -53,11 +53,7 @@ query getIssuesWithComments(
 }
 """
 
-def json_names():
-    for i in itertools.count():
-        yield f"out_{i:02}.json"
-
-JSON_NAMES = json_names()
+JSON_NAMES = (f"out_{i:02}.json" for i in itertools.count())
 
 async def gql_execute(query, variables=None):
     data = await client.execute_async(query=query, variables=variables)
