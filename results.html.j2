@@ -25,19 +25,37 @@
   .icon {
     display: inline-block;
     width: .75em;
+    color: #ccc;
+  }
+  .icon.created, .icon.closed {
+    color: black;
+  }
+  a {
+    text-decoration: none;
+  }
+  a:hover {
+    text-decoration: underscore;
   }
   </style>
 <body>
 <h1>Issue updates since {{ since|datetime("%Y-%m-%d") }}</h1>
 <ul class="repo">
-  {% for kind, thing, issues in results -%}
-    <li>{{ kind }} {{thing}}
+  {% for thing, issues in results -%}
+    <li>
+      {{ thing.kind }}
+      <b><a href="{{ thing.url }}">
+      {% if thing.kind == "repo" %}
+        {{ thing.nameWithOwner }}
+      {% elif thing.kind == "project" %}
+        {{ thing.title }}
+      {% endif %}
+      </a></b>
       <ul class="issue">
         {% for issue in issues -%}
           <li class="{{ issue.state|lower }}">
-            <span class="icon created">{% if issue.reasonCreated %}&Star;{% else %}&ndash;{% endif %}</span>
-            <span class="icon closed">{% if issue.reasonClosed %}&times;{% else %}&ndash;{% endif %}</span>
-            <a href="{{ issue.url }}">{{ issue.number }}: {{issue.title}}</a>
+            {% if issue.reasonCreated %}<span class="icon created">&Star;{% else %}<span class="icon">&ndash;{% endif %}</span>
+            {% if issue.reasonClosed %}<span class="icon closed">&times;{% else %}<span class="icon">&ndash;{% endif %}</span>
+            <a href="{{ issue.url }}">{{ issue.number }}: <b>{{issue.title}}</b></a>
             [{{ issue.author.login }}]
             {% if kind == "project" %}{{ issue.repository.nameWithOwner }}{% endif %}
             <p>{{ issue.body|truncate(120) }}</p>

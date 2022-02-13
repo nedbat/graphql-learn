@@ -18,6 +18,8 @@ client = python_graphql_client.GraphqlClient(
 
 REPO_DATA_FRAGMENT = """\
 fragment repoData on Repository {
+    owner { login }
+    name
     nameWithOwner
     url
 }
@@ -125,7 +127,7 @@ query getProjectIssues(
     $after: String
 ) {
     organization(login: $org) {
-        projectNext(number: $projectNumber) {
+        project: projectNext(number: $projectNumber) {
             title
             url
             items (first: 100, after: $after) {
@@ -155,8 +157,7 @@ async def gql_execute(query, variables=None):
     args = ", ".join(f"{k}: {v!r}" for k, v in variables.items())
     print(query.splitlines()[0] + args + ")")
     data = await client.execute_async(query=query, variables=variables)
-    with open(next(JSON_NAMES), "w") as j:
-        json.dump(data, j, indent=4)
+    json_save(data, next(JSON_NAMES))
     if "message" in data:
         raise Exception(data["message"])
     if "errors" in data:
@@ -176,6 +177,9 @@ async def gql_execute(query, variables=None):
 async def gql_nodes(query, path, variables=None):
     """
     Execute a GraphQL query, and follow the pagination to get all the nodes.
+
+    Returns the last query result (for the information outside the pagination),
+    and the list of all paginated nodes.
     """
     nodes = []
     vars = dict(variables)
@@ -186,7 +190,9 @@ async def gql_nodes(query, path, variables=None):
         if not fetched["pageInfo"]["hasNextPage"]:
             break
         vars["after"] = fetched["pageInfo"]["endCursor"]
-    return nodes
+    # Remove the nodes from the data we return, to keep things clean.
+    fetched["nodes"] = []
+    return data, nodes
 
 async def get_repo_issues(repo, since):
     """
@@ -194,8 +200,11 @@ async def get_repo_issues(repo, since):
     """
     owner, name = repo.split("/")
     vars = dict(owner=owner, name=name, since=since)
-    issues = await gql_nodes(query=REPO_ISSUES_QUERY, path="repository.issues", variables=vars)
-    return await populate_issues(issues, since)
+    repo, issues = await gql_nodes(query=REPO_ISSUES_QUERY, path="repository.issues", variables=vars)
+    issues = await populate_issues(issues, since)
+    repo = glom.glom(repo, "data.repository")
+    repo["kind"] = "repo"
+    return repo, issues
 
 async def populate_issues(issues, since):
     # Need to get full comments.
@@ -203,11 +212,12 @@ async def populate_issues(issues, since):
     issue_queries = []
     for iss in issues:
         if iss["comments"]["totalCount"] > len(iss["comments"]["nodes"]):
-            vars = dict(owner=owner, name=name, number=iss["number"])
+            vars = dict(owner=iss["repository"]["owner"]["login"], name=iss["repository"]["name"], number=iss["number"])
             queried_issues.append(iss)
-            issue_queries.append(gql_nodes(query=COMMENTS_QUERY, path="repository.issue.comments", variables=vars))
+            comments = gql_nodes(query=COMMENTS_QUERY, path="repository.issue.comments", variables=vars)
+            issue_queries.append(comments)
     commentss = await asyncio.gather(*issue_queries)
-    for iss, comments in zip(queried_issues, commentss):
+    for iss, (_, comments) in zip(queried_issues, commentss):
         iss["comments"]["nodes"] = comments
 
     # Trim comments to those since our since date.
@@ -223,11 +233,13 @@ async def populate_issues(issues, since):
 
 async def get_project_issues(org, number, since):
     vars = dict(org=org, projectNumber=number)
-    project_data = await gql_nodes(query=PROJECT_ISSUES_QUERY, path="organization.projectNext.items", variables=vars)
-    json_save(project_data, "out_projects.json")
+    project, project_data = await gql_nodes(query=PROJECT_ISSUES_QUERY, path="organization.project.items", variables=vars)
     issues = [content for data in project_data if (content := data["content"])]
     issues = [iss for iss in issues if iss["updatedAt"] > since]
-    return await populate_issues(issues, since)
+    issues = await populate_issues(issues, since)
+    project = glom.glom(project, "data.organization.project")
+    project["kind"] = "project"
+    return project, issues
 
 
 SINCE = "2022-02-10T00:00:00"
@@ -265,12 +277,7 @@ async def main():
         *(get_repo_issues(repo, since=SINCE) for repo in REPOS),
         *(get_project_issues(org, number, SINCE) for org, number in PROJECTS),
     ]
-    owners = [
-        *(("repo", repo) for repo in REPOS),
-        *(("project", f"{org}/{num}") for org, num in PROJECTS)
-    ]
-    issuess = await asyncio.gather(*tasks)
-    results = [[*owner, issues] for owner, issues in zip(owners, issuess)]
+    results = await asyncio.gather(*tasks)
     json_save(results, "out_results.json")
     html = render_jinja("results.html.j2", results=results, since=SINCE)
     with open("results.html", "w") as html_out:
