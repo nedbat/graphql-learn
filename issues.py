@@ -39,6 +39,8 @@ query getIssues(
     $after: String
 ) {
     repository(owner: $owner, name: $name) {
+        nameWithOwner
+        url
         issues (first: 100, filterBy: {since: $since}, after: $after) {
             pageInfo {
                 hasNextPage
@@ -157,6 +159,20 @@ async def get_issues(repo, since):
     issues.sort(key=operator.itemgetter("updatedAt"))
     return issues
 
-issues = asyncio.run(get_issues("nedbat/coveragepy", since="2022-01-01T00:00:00"))
-for iss in issues:
-    print(f"{iss['number']}: {iss['state']} {iss['updatedAt']} {iss['title']} [{len(iss['comments']['nodes'])}]")
+SINCE = "2022-02-01T00:00:00"
+REPOS = [
+    "nedbat/coveragepy",
+    "openedx/tcril-engineering",
+    "edx/open-source-process-wg",
+]
+
+async def main():
+    tasks = [get_issues(repo, since=SINCE) for repo in REPOS]
+    issuess = await asyncio.gather(*tasks)
+    for repo, issues in zip(REPOS, issuess):
+        print(f"{repo} has {len(issues)} issues to show")
+
+asyncio.run(main())
+# issues = asyncio.run(get_issues("nedbat/coveragepy", since="2022-01-01T00:00:00"))
+# for iss in issues:
+#     print(f"{iss['number']}: {iss['state']} {iss['updatedAt']} {iss['title']} [{len(iss['comments']['nodes'])}]")
