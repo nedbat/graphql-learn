@@ -8,6 +8,8 @@
           <li class="issue {{ issue.state }}">
             <a href="{{ issue.url }}">{{ issue.number }}: {{issue.title}}</a>
             [{{ issue.author.login }}]
+            <br>
+            {{ issue.body|truncate(120) }}
             <ul>
               {% for comment in issue.comments.nodes -%}
                 <li>
