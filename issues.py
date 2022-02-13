@@ -114,6 +114,9 @@ async def gql_execute(query, variables=None):
             loc = err["locations"][0]
             msg += f", line {loc['line']} column {loc['column']}"
         raise Exception(msg)
+    if "data" in data and data["data"] is None:
+        # Another kind of failure response?
+        raise Exception("GraphQL query returned null")
     return data
 
 async def gql_nodes(query, path, variables=None):
