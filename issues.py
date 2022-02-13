@@ -13,6 +13,13 @@ client = GraphqlClient(
     headers={"Authorization": f"Bearer {TOKEN}"},
 )
 
+REPO_DATA_FRAGMENT = """\
+fragment repoData on Repository {
+    nameWithOwner
+    url
+}
+"""
+
 AUTHOR_DATA_FRAGMENT = """\
 fragment authorData on Actor {
     login
@@ -31,6 +38,30 @@ fragment commentData on IssueComment {
 }
 """
 
+ISSUE_DATA_FRAGMENT = """\
+fragment issueData on Issue {
+    repository {
+        ...repoData
+    }
+    number
+    url
+    title
+    state
+    createdAt
+    updatedAt
+    author {
+        ...authorData
+    }
+    body
+    comments (last: 100) {
+        totalCount
+        nodes {
+            ...commentData
+        }
+    }
+}
+"""
+
 ISSUES_QUERY = """\
 query getIssues(
     $owner: String!
@@ -39,35 +70,16 @@ query getIssues(
     $after: String
 ) {
     repository(owner: $owner, name: $name) {
-        nameWithOwner
-        url
+        ...repoData
         issues (first: 100, filterBy: {since: $since}, after: $after) {
-            pageInfo {
-                hasNextPage
-                endCursor
-            }
+            pageInfo { hasNextPage, endCursor }
             nodes {
-                number
-                url
-                title
-                state
-                createdAt
-                updatedAt
-                body
-                author {
-                    ...authorData
-                }
-                comments (last: 100) {
-                    totalCount
-                    nodes {
-                        ...commentData
-                    }
-                }
+                ...issueData
             }
         }
     }
 }
-""" + AUTHOR_DATA_FRAGMENT + COMMENT_DATA_FRAGMENT
+""" + REPO_DATA_FRAGMENT + ISSUE_DATA_FRAGMENT + AUTHOR_DATA_FRAGMENT + COMMENT_DATA_FRAGMENT
 
 COMMENTS_QUERY = """\
 query getIssueComments(
@@ -79,10 +91,7 @@ query getIssueComments(
     repository(owner: $owner, name: $name) {
         issue (number: $number) {
             comments (first: 100, after: $after) {
-                pageInfo {
-                    hasNextPage
-                    endCursor
-                }
+                pageInfo { hasNextPage, endCursor }
                 nodes {
                     ...commentData
                 }
