@@ -1,4 +1,5 @@
 import asyncio
+import itertools
 import json
 import os
 
@@ -19,44 +20,79 @@ def json_out(data):
         json.dump(data, j, indent=4)
 
 QUERY = """\
-query getIssuesWithComments($owner: String!, $name: String!) {
-  repository(owner: $owner, name: $name) {
-    issues (last: 50, filterBy: { since: "2022-02-01T00:00:00" } ) {
-      pageInfo {
-        hasNextPage
-        endCursor
-      }
-      nodes {
-        url
-        title
-        createdAt
-        body
-        comments (last: 20) {
-          totalCount
-          nodes {
-            body
-          }
+query getIssuesWithComments(
+    $owner: String!
+    $name: String!
+    $since: String!
+    $after: String
+) {
+    repository(owner: $owner, name: $name) {
+        issues (first: 100, filterBy: {since: $since}, after: $after) {
+            pageInfo {
+                hasNextPage
+                endCursor
+            }
+            nodes {
+                url
+                title
+                createdAt
+                body
+                author {
+                    login
+                    url
+                    avatarUrl
+                }
+                comments (last: 20) {
+                    totalCount
+                    nodes {
+                        body
+                        author {
+                            login
+                            url
+                            avatarUrl
+                        }
+                    }
+                }
+            }
         }
-      }
     }
-  }
 }
 """
 
+def json_names():
+    for i in itertools.count():
+        yield f"out_{i:02}.json"
+
+JSON_NAMES = json_names()
+
 async def gql_execute(query, variables=None):
     data = await client.execute_async(query=query, variables=variables)
-    json_out(data)
+    with open(next(JSON_NAMES), "w") as j:
+        json.dump(data, j, indent=4)
     if "message" in data:
         raise Exception(data["message"])
     if "errors" in data:
         err = data["errors"][0]
+        msg = f"GraphQl error: {err['message']}"
+        if "path" in err:
+            msg += f" @{'.'.join(err['path'])}"
         loc = err["locations"][0]
-        raise Exception(
-            f"GraphQl error: {err['message']} " +
-            f"@{'.'.join(err['path'])}, " +
-            f"line {loc['line']} " +
-            f"column {loc['column']}"
-        )
+        msg += f", line {loc['line']} column {loc['column']}"
+        raise Exception(msg)
     return data
 
-data = asyncio.run(gql_execute(query=QUERY, variables={"owner": "nedbat", "name": "coveragepy"}))
+async def gql_nodes(query, path, variables=None):
+    nodes = []
+    vars = dict(variables)
+    while True:
+        data = await gql_execute(query, vars)
+        fetched = glom(data, f"data.{path}")
+        nodes.extend(fetched["nodes"])
+        if not fetched["pageInfo"]["hasNextPage"]:
+            break
+        vars["after"] = fetched["pageInfo"]["endCursor"]
+    return nodes
+
+vars = dict(owner="nedbat", name="coveragepy", since="2020-01-01T00:00:00")
+coro = gql_nodes(query=QUERY, path="repository.issues", variables=vars)
+data = asyncio.run(coro)
