@@ -12,13 +12,6 @@ client = GraphqlClient(
     headers={"Authorization": f"Bearer {TOKEN}"},
 )
 
-def show_json(data):
-    print(json.dumps(data, indent=4))
-
-def json_out(data):
-    with open("out.json", "w") as j:
-        json.dump(data, j, indent=4)
-
 QUERY = """\
 fragment authorData on Actor {
     login
