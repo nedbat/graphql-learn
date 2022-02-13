@@ -21,6 +21,16 @@ fragment authorData on Actor {
 }
 """
 
+COMMENT_DATA_FRAGMENT = """\
+fragment commentData on IssueComment {
+    body
+    updatedAt
+    author {
+        ...authorData
+    }
+}
+"""
+
 ISSUES_QUERY = """\
 query getIssues(
     $owner: String!
@@ -48,17 +58,14 @@ query getIssues(
                 comments (last: 100) {
                     totalCount
                     nodes {
-                        body
-                        author {
-                            ...authorData
-                        }
+                        ...commentData
                     }
                 }
             }
         }
     }
 }
-""" + AUTHOR_DATA_FRAGMENT
+""" + AUTHOR_DATA_FRAGMENT + COMMENT_DATA_FRAGMENT
 
 COMMENTS_QUERY = """\
 query getIssueComments(
@@ -75,16 +82,13 @@ query getIssueComments(
                     endCursor
                 }
                 nodes {
-                    body
-                    author {
-                        ...authorData
-                    }
+                    ...commentData
                 }
             }
         }
     }
 }
-""" + AUTHOR_DATA_FRAGMENT
+""" + AUTHOR_DATA_FRAGMENT + COMMENT_DATA_FRAGMENT
 
 JSON_NAMES = (f"out_{i:02}.json" for i in itertools.count())
 
@@ -130,7 +134,7 @@ async def get_issues(repo, since):
     vars = dict(owner=owner, name=name, since=since)
     issues = await gql_nodes(query=ISSUES_QUERY, path="repository.issues", variables=vars)
 
-    issues.sort(key=operator.itemgetter("updatedAt"))
+    # Need to get full comments.
     queried_issues = []
     issue_queries = []
     for i, iss in enumerate(issues):
@@ -141,6 +145,12 @@ async def get_issues(repo, since):
     commentss = await asyncio.gather(*issue_queries)
     for i, comments in zip(queried_issues, commentss):
         issues[i]["comments"]["nodes"] = comments
+
+    # Trim comments to those since our since date.
+    for iss in issues:
+        iss["comments"]["nodes"] = [c for c in iss["comments"]["nodes"] if c["updatedAt"] >= since]
+
+    issues.sort(key=operator.itemgetter("updatedAt"))
     return issues
 
 issues = asyncio.run(get_issues("nedbat/coveragepy", since="2022-01-01T00:00:00"))
