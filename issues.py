@@ -116,7 +116,7 @@ async def gql_execute(query, variables=None):
 
 async def gql_nodes(query, path, variables=None):
     """
-    Excecute a query, and follow the pagination to get all the nodes.
+    Excecute a GraphQL query, and follow the pagination to get all the nodes.
     """
     nodes = []
     vars = dict(variables)
@@ -130,6 +130,9 @@ async def gql_nodes(query, path, variables=None):
     return nodes
 
 async def get_issues(repo, since):
+    """
+    Get issues from a repo updated since a date, with comments since that date.
+    """
     owner, name = repo.split("/")
     vars = dict(owner=owner, name=name, since=since)
     issues = await gql_nodes(query=ISSUES_QUERY, path="repository.issues", variables=vars)
@@ -137,18 +140,19 @@ async def get_issues(repo, since):
     # Need to get full comments.
     queried_issues = []
     issue_queries = []
-    for i, iss in enumerate(issues):
+    for iss in issues:
         if iss["comments"]["totalCount"] > len(iss["comments"]["nodes"]):
             vars = dict(owner=owner, name=name, number=iss["number"])
-            queried_issues.append(i)
+            queried_issues.append(iss)
             issue_queries.append(gql_nodes(query=COMMENTS_QUERY, path="repository.issue.comments", variables=vars))
     commentss = await asyncio.gather(*issue_queries)
-    for i, comments in zip(queried_issues, commentss):
-        issues[i]["comments"]["nodes"] = comments
+    for iss, comments in zip(queried_issues, commentss):
+        iss["comments"]["nodes"] = comments
 
     # Trim comments to those since our since date.
     for iss in issues:
-        iss["comments"]["nodes"] = [c for c in iss["comments"]["nodes"] if c["updatedAt"] >= since]
+        comments = iss["comments"]
+        comments["nodes"] = [c for c in comments["nodes"] if c["updatedAt"] >= since]
 
     issues.sort(key=operator.itemgetter("updatedAt"))
     return issues
