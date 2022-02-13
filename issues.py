@@ -75,11 +75,7 @@ fragment issueData on Issue {
             }
         }
     }
-    timelineItems(last: 100) {
-        nodes {
-            __typename
-        }
-    }
+    # Issues have timelineItems, but added or removed from projectNext isn't listed.
 }
 """
 
