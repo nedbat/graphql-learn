@@ -20,6 +20,11 @@ def json_out(data):
         json.dump(data, j, indent=4)
 
 QUERY = """\
+fragment authorData on Actor {
+    login
+    url
+    avatarUrl
+}
 query getIssuesWithComments(
     $owner: String!
     $name: String!
@@ -38,18 +43,14 @@ query getIssuesWithComments(
                 createdAt
                 body
                 author {
-                    login
-                    url
-                    avatarUrl
+                    ...authorData
                 }
                 comments (last: 20) {
                     totalCount
                     nodes {
                         body
                         author {
-                            login
-                            url
-                            avatarUrl
+                            ...authorData
                         }
                     }
                 }
