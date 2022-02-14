@@ -329,7 +329,7 @@ async def main():
     """
     Summarize all the things!
 
-    Writes results.html
+    Writes digest.html
 
     """
     # results = await gql_execute(
@@ -343,9 +343,9 @@ async def main():
         *(itertools.starmap(summarizer.get_project_issues, PROJECTS)),
     ]
     results = await asyncio.gather(*tasks)
-    json_save(results, "out_results.json")
-    html = render_jinja("results.html.j2", results=results, since=SINCE)
-    with open("results.html", "w", encoding="utf-8") as html_out:
+    json_save(results, "out_digest.json")
+    html = render_jinja("digest.html.j2", results=results, since=SINCE)
+    with open("digest.html", "w", encoding="utf-8") as html_out:
         html_out.write(html)
 
 asyncio.run(main())

@@ -8,7 +8,7 @@ There are two programs here:
   releases.  Doing this with the REST API takes about a minute. Using GraphQL
   takes about six seconds.
 
-- issues.py
+- github_digest.py
 
   Examines repos and projects, producing a report of changes since a certain
   date.  Makes a "daily digest" of activity across a number of issue
