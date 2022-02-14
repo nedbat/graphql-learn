@@ -1,4 +1,5 @@
 import asyncio
+import colorsys
 import datetime
 import itertools
 import json
@@ -75,6 +76,12 @@ fragment issueData on Issue {
                 }
                 number
             }
+        }
+    }
+    labels(first:10) {
+        nodes {
+            color
+            name
         }
     }
     # Issues have timelineItems, but added or removed from projectNext isn't listed.
@@ -333,9 +340,17 @@ def datetime_format(value, format="%m-%d %H:%M"):
     """Format an ISO datetime string, for Jinja filtering."""
     return datetime.datetime.fromisoformat(value.replace("Z", "+00:00")).strftime(format)
 
+def textcolor(bg):
+    """Calculate a text color for a background color `bg`."""
+    r, g, b = bg[0:2], bg[2:4], bg[4:6]
+    r, g, b = int(r, 16) / 256, int(g, 16) / 256, int(b, 16) / 256
+    lightness = colorsys.rgb_to_hsv(r, g, b)[2]
+    return "black" if lightness > .5 else "white"
+
 def render_jinja(template_filename, **vars):
     jenv = jinja2.Environment(loader=jinja2.FileSystemLoader(Path(__file__).parent))
     jenv.filters["datetime"] = datetime_format
+    jenv.filters["textcolor"] = textcolor
     template = jenv.get_template(template_filename)
     html = template.render(**vars)
     return html
