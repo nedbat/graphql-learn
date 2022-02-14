@@ -1,16 +1,14 @@
 import asyncio
-import colorsys
-import datetime
 import itertools
 import json
 import operator
 import os
-from pathlib import Path
 
-import wcag_contrast_ratio
 import glom
-import jinja2
 import python_graphql_client
+
+from jinja_helpers import render_jinja
+
 
 TOKEN = os.environ.get("GITHUB_TOKEN", "")
 client = python_graphql_client.GraphqlClient(
@@ -339,26 +337,6 @@ PROJECTS = [
 PULL_REQUESTS = [
     "openedx/open-edx-proposals",
 ]
-
-def datetime_format(value, format="%m-%d %H:%M"):
-    """Format an ISO datetime string, for Jinja filtering."""
-    return datetime.datetime.fromisoformat(value.replace("Z", "+00:00")).strftime(format)
-
-def textcolor(bg):
-    """Calculate a text color for a background color `bg`."""
-    r, g, b = bg[0:2], bg[2:4], bg[4:6]
-    rgb = int(r, 16) / 256, int(g, 16) / 256, int(b, 16) / 256
-    bcontrast = wcag_contrast_ratio.rgb(rgb, (0, 0, 0))
-    wcontrast = wcag_contrast_ratio.rgb(rgb, (1, 1, 1))
-    return "black" if bcontrast > wcontrast else "white"
-
-def render_jinja(template_filename, **vars):
-    jenv = jinja2.Environment(loader=jinja2.FileSystemLoader(Path(__file__).parent))
-    jenv.filters["datetime"] = datetime_format
-    jenv.filters["textcolor"] = textcolor
-    template = jenv.get_template(template_filename)
-    html = template.render(**vars)
-    return html
 
 def json_save(data, filename):
     with open(filename, "w") as json_out:
