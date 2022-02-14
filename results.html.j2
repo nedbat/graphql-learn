@@ -40,6 +40,10 @@
     padding: .2em 0.5em;
     border-radius: 2em;
     font-size: 75%;
+    opacity: .75;
+  }
+  .homerepo {
+    color: #888;
   }
   </style>
 <body>
@@ -58,15 +62,23 @@
       <ul class="issue">
         {% for issue in issues -%}
           <li class="{{ issue.state|lower }}">
+
             {% if issue.reasonCreated %}<span class="icon created">&Star;{% else %}<span class="icon">&ndash;{% endif %}</span>
             {% if issue.reasonClosed %}<span class="icon closed">&times;{% else %}<span class="icon">&ndash;{% endif %}</span>
-            <a href="{{ issue.url }}">{{ issue.number }}: <b>{{issue.title}}</b></a>
+
+            <a href="{{ issue.url }}"><b>{{issue.title}}</b> #{{ issue.number }}</a>
             [{{ issue.author.login }}]
-            {% if kind == "project" %}{{ issue.repository.nameWithOwner }}{% endif %}
+
             {% for label in issue.labels.nodes %}
               <span class="label" style="background: #{{label.color}}; color: {{label.color|textcolor}}">{{ label.name }}</span>
             {% endfor %}
+
+            {% if thing.kind == "project" %}
+              <span class="homerepo">{{ issue.repository.nameWithOwner }}</span>
+            {% endif %}
+
             <p>{{ issue.body|truncate(120) }}</p>
+
             <ul class="comment">
               {% for comment in issue.comments.nodes -%}
                 <li>
@@ -77,6 +89,7 @@
                 </li>
               {% endfor %}
             </ul>
+
           </li>
         {% endfor %}
       </ul>
