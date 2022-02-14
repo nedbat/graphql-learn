@@ -73,7 +73,7 @@
               <span class="label" style="background: #{{label.color}}; color: {{label.color|textcolor}}">{{ label.name }}</span>
             {% endfor %}
 
-            {% if thing.kind == "project" %}
+            {% if issue.other_repo %}
               <span class="homerepo">{{ issue.repository.nameWithOwner }}</span>
             {% endif %}
 

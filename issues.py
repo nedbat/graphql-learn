@@ -309,12 +309,14 @@ async def populate_issues(issues, since):
     issues.sort(key=operator.itemgetter("updatedAt"))
     return issues
 
-async def get_project_issues(org, number, since):
+async def get_project_issues(org, number, homerepo, since):
     vars = dict(org=org, projectNumber=number)
     project, project_data = await gql_nodes(query=PROJECT_ISSUES_QUERY, path="organization.project.items", variables=vars)
     issues = [content for data in project_data if (content := data["content"])]
     issues = [iss for iss in issues if iss["updatedAt"] > since]
     issues = await populate_issues(issues, since)
+    for iss in issues:
+        iss["other_repo"] = (iss["repository"]["nameWithOwner"] != homerepo)
     project = glom.glom(project, "data.organization.project")
     project["kind"] = "project"
     return project, issues
@@ -328,9 +330,10 @@ ISSUES = [
     # "edx/open-source-process-wg",
 ]
 
+# Projects: org, proj number, and default issue home repo
 PROJECTS = [
-    ("edx", 7),
-    ("openedx", 8),
+    ("edx", 7, "edx/open-source-process-wg"),
+    ("openedx", 8, "openedx/tcril-engineering"),
 ]
 
 PULL_REQUESTS = [
@@ -367,7 +370,7 @@ async def main():
     json_save(results, "out_prs.json")
     tasks = [
         *(get_repo_issues(repo, since=SINCE) for repo in ISSUES),
-        *(get_project_issues(org, number, SINCE) for org, number in PROJECTS),
+        *(get_project_issues(org, number, homerepo, SINCE) for org, number, homerepo in PROJECTS),
     ]
     results = await asyncio.gather(*tasks)
     json_save(results, "out_results.json")
