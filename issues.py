@@ -148,6 +148,76 @@ query getProjectIssues(
 }
 """ + REPO_DATA_FRAGMENT + ISSUE_DATA_FRAGMENT + AUTHOR_DATA_FRAGMENT + COMMENT_DATA_FRAGMENT
 
+PULL_REQUESTS_QUERY = """\
+query getPullRequests(
+    $owner: String!
+    $name: String!
+    $after: String
+) {
+    repository (owner: $owner, name: $name) {
+        ...repoData
+        pullRequests (last: 10, after: $after) {
+            pageInfo { hasNextPage, endCursor }
+            nodes {
+                number
+                title
+                url
+                comments (first: 100) {
+                    totalCount
+                    nodes {
+                        ...commentData
+                    }
+                }
+                latestOpinionatedReviews (first: 100) {
+                    totalCount
+                    nodes {
+                        author { login }
+                        body
+                        comments (first: 100) {
+                            totalCount
+                            nodes {
+                                author {login}
+                                body
+                                url
+                            }
+                        }
+                    }
+                }
+                latestReviews (first: 100) {
+                    totalCount
+                    nodes {
+                        author { login }
+                        body
+                        comments (first: 100) {
+                            totalCount
+                            nodes {
+                                author {login}
+                                body
+                                url
+                            }
+                        }
+                    }
+                }
+                reviewThreads (first: 100) {
+                    totalCount
+                    nodes {
+                        comments (first: 100) {
+                            totalCount
+                            nodes {
+                                author { login }
+                                body
+                                url
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+""" + REPO_DATA_FRAGMENT + AUTHOR_DATA_FRAGMENT + COMMENT_DATA_FRAGMENT
+
+
 JSON_NAMES = (f"out_{i:02}.json" for i in itertools.count())
 
 async def gql_execute(query, variables=None):
@@ -244,7 +314,7 @@ async def get_project_issues(org, number, since):
 
 SINCE = "2022-02-10T00:00:00"
 
-REPOS = [
+ISSUES = [
     # "nedbat/coveragepy",
     # "openedx/tcril-engineering",
     # "edx/open-source-process-wg",
@@ -255,6 +325,9 @@ PROJECTS = [
     ("openedx", 8),
 ]
 
+PULL_REQUESTS = [
+    "openedx/open-edx-proposals",
+]
 
 def datetime_format(value, format="%m-%d %H:%M"):
     """Format an ISO datetime string, for Jinja filtering."""
@@ -273,8 +346,10 @@ def json_save(data, filename):
 
 
 async def main():
+    results = await gql_execute(PULL_REQUESTS_QUERY, variables=dict(owner="openedx", name="open-edx-proposals"))
+    json_save(results, "out_prs.json")
     tasks = [
-        *(get_repo_issues(repo, since=SINCE) for repo in REPOS),
+        *(get_repo_issues(repo, since=SINCE) for repo in ISSUES),
         *(get_project_issues(org, number, SINCE) for org, number in PROJECTS),
     ]
     results = await asyncio.gather(*tasks)
