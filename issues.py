@@ -1,20 +1,18 @@
+"""
+Summarize issue activity in GitHub repos and projects.
+"""
+
 import asyncio
 import itertools
-import json
 import operator
 import os
 
 import glom
-import python_graphql_client
 
+from graphql_helpers import GraphqlHelper
+from helpers import json_save
 from jinja_helpers import render_jinja
 
-
-TOKEN = os.environ.get("GITHUB_TOKEN", "")
-client = python_graphql_client.GraphqlClient(
-    endpoint="https://api.github.com/graphql",
-    headers={"Authorization": f"Bearer {TOKEN}"},
-)
 
 REPO_DATA_FRAGMENT = """\
 fragment repoData on Repository {
@@ -224,111 +222,100 @@ query getPullRequests(
 """ + REPO_DATA_FRAGMENT + AUTHOR_DATA_FRAGMENT + COMMENT_DATA_FRAGMENT
 
 
-JSON_NAMES = (f"out_{i:02}.json" for i in itertools.count())
-
-async def gql_execute(query, variables=None):
+class Summarizer:
     """
-    Execute one GraphQL query, with logging and error handling.
+    Use GitHub GraphQL to get data about recent changes.
     """
-    args = ", ".join(f"{k}: {v!r}" for k, v in variables.items())
-    print(query.splitlines()[0] + args + ")")
-    data = await client.execute_async(query=query, variables=variables)
-    json_save(data, next(JSON_NAMES))
-    if "message" in data:
-        raise Exception(data["message"])
-    if "errors" in data:
-        err = data["errors"][0]
-        msg = f"GraphQL error: {err['message']}"
-        if "path" in err:
-            msg += f" @{'.'.join(err['path'])}"
-        if "locations" in err:
-            loc = err["locations"][0]
-            msg += f", line {loc['line']} column {loc['column']}"
-        raise Exception(msg)
-    if "data" in data and data["data"] is None:
-        # Another kind of failure response?
-        raise Exception("GraphQL query returned null")
-    return data
+    def __init__(self, since):
+        self.since = since
+        token = os.environ.get("GITHUB_TOKEN", "")
+        self.gql = GraphqlHelper("https://api.github.com/graphql", token)
 
-async def gql_nodes(query, path, variables=None):
-    """
-    Execute a GraphQL query, and follow the pagination to get all the nodes.
+    async def get_repo_issues(self, repo):
+        """
+        Get issues from a repo updated since a date, with comments since that date.
 
-    Returns the last query result (for the information outside the pagination),
-    and the list of all paginated nodes.
-    """
-    nodes = []
-    vars = dict(variables)
-    while True:
-        data = await gql_execute(query, vars)
-        fetched = glom.glom(data, f"data.{path}")
-        nodes.extend(fetched["nodes"])
-        if not fetched["pageInfo"]["hasNextPage"]:
-            break
-        vars["after"] = fetched["pageInfo"]["endCursor"]
-    # Remove the nodes from the data we return, to keep things clean.
-    fetched["nodes"] = []
-    return data, nodes
+        Args:
+            repo (str): a combined owner/name of a repo, like "openedx/edx-platform".
 
-async def get_repo_issues(repo, since):
-    """
-    Get issues from a repo updated since a date, with comments since that date.
-    """
-    owner, name = repo.split("/")
-    vars = dict(owner=owner, name=name, since=since)
-    repo, issues = await gql_nodes(query=REPO_ISSUES_QUERY, path="repository.issues", variables=vars)
-    issues = await populate_issues(issues, since)
-    repo = glom.glom(repo, "data.repository")
-    repo["kind"] = "repo"
-    return repo, issues
+        """
+        owner, name = repo.split("/")
+        repo, issues = await self.gql.nodes(
+            query=REPO_ISSUES_QUERY,
+            path="repository.issues",
+            variables=dict(owner=owner, name=name, since=self.since),
+        )
+        issues = await self._populate_issues(issues)
+        repo = glom.glom(repo, "data.repository")
+        repo["kind"] = "repo"
+        return repo, issues
 
-async def populate_issues(issues, since):
-    # Need to get full comments.
-    queried_issues = []
-    issue_queries = []
-    for iss in issues:
-        if iss["comments"]["totalCount"] > len(iss["comments"]["nodes"]):
-            vars = dict(owner=iss["repository"]["owner"]["login"], name=iss["repository"]["name"], number=iss["number"])
-            queried_issues.append(iss)
-            comments = gql_nodes(query=COMMENTS_QUERY, path="repository.issue.comments", variables=vars)
-            issue_queries.append(comments)
-    commentss = await asyncio.gather(*issue_queries)
-    for iss, (_, comments) in zip(queried_issues, commentss):
-        iss["comments"]["nodes"] = comments
+    async def get_project_issues(self, org, number, home_repo):
+        """
+        Get issues from a project.
 
-    # Trim comments to those since our since date.
-    # Why was this issue in the list?
-    for iss in issues:
-        comments = iss["comments"]
-        comments["nodes"] = [c for c in comments["nodes"] if c["updatedAt"] >= since]
-        iss["reasonCreated"] = iss["createdAt"] > since
-        iss["reasonClosed"] = bool(iss["closedAt"] and (iss["closedAt"] > since))
+        Args:
+            org (str): the organization owner of the repo.
+            number (int): the project number.
+            home_repo (str): the owner/name of a repo that most issues are in.
+        """
+        project, project_data = await self.gql.nodes(
+            query=PROJECT_ISSUES_QUERY,
+            path="organization.project.items",
+            variables=dict(org=org, projectNumber=number),
+        )
+        issues = [content for data in project_data if (content := data["content"])]
+        issues = [iss for iss in issues if iss["updatedAt"] > self.since]
+        issues = await self._populate_issues(issues)
+        for iss in issues:
+            iss["other_repo"] = (iss["repository"]["nameWithOwner"] != home_repo)
+        project = glom.glom(project, "data.organization.project")
+        project["kind"] = "project"
+        return project, issues
 
-    issues.sort(key=operator.itemgetter("updatedAt"))
-    return issues
+    async def _populate_issues(self, issues):
+        # Need to get full comments.
+        queried_issues = []
+        issue_queries = []
+        for iss in issues:
+            if iss["comments"]["totalCount"] > len(iss["comments"]["nodes"]):
+                queried_issues.append(iss)
+                comments = self.gql.nodes(
+                    query=COMMENTS_QUERY,
+                    path="repository.issue.comments",
+                    variables=dict(
+                        owner=iss["repository"]["owner"]["login"],
+                        name=iss["repository"]["name"],
+                        number=iss["number"],
+                    )
+                )
+                issue_queries.append(comments)
+        commentss = await asyncio.gather(*issue_queries)
+        for iss, (_, comments) in zip(queried_issues, commentss):
+            iss["comments"]["nodes"] = comments
 
-async def get_project_issues(org, number, homerepo, since):
-    vars = dict(org=org, projectNumber=number)
-    project, project_data = await gql_nodes(query=PROJECT_ISSUES_QUERY, path="organization.project.items", variables=vars)
-    issues = [content for data in project_data if (content := data["content"])]
-    issues = [iss for iss in issues if iss["updatedAt"] > since]
-    issues = await populate_issues(issues, since)
-    for iss in issues:
-        iss["other_repo"] = (iss["repository"]["nameWithOwner"] != homerepo)
-    project = glom.glom(project, "data.organization.project")
-    project["kind"] = "project"
-    return project, issues
+        # Trim comments to those since our since date.
+        # Why was this issue in the list?
+        for iss in issues:
+            comments = iss["comments"]
+            comments["nodes"] = [c for c in comments["nodes"] if c["updatedAt"] >= self.since]
+            iss["reasonCreated"] = iss["createdAt"] > self.since
+            iss["reasonClosed"] = bool(iss["closedAt"] and (iss["closedAt"] > self.since))
+
+        issues.sort(key=operator.itemgetter("updatedAt"))
+        return issues
 
 
 SINCE = "2022-02-10T00:00:00"
 
+# Issues in repos: arguments for get_repo_issues
 ISSUES = [
-    # "nedbat/coveragepy",
-    # "openedx/tcril-engineering",
-    # "edx/open-source-process-wg",
+    # ("nedbat/coveragepy",),
+    # ("openedx/tcril-engineering",),
+    # ("edx/open-source-process-wg",),
 ]
 
-# Projects: org, proj number, and default issue home repo
+# Issues in projects: arguments for get_project_issues
 PROJECTS = [
     ("edx", 7, "edx/open-source-process-wg"),
     ("openedx", 8, "openedx/tcril-engineering"),
@@ -338,22 +325,27 @@ PULL_REQUESTS = [
     "openedx/open-edx-proposals",
 ]
 
-def json_save(data, filename):
-    with open(filename, "w") as json_out:
-        json.dump(data, json_out, indent=4)
-
-
 async def main():
-    results = await gql_execute(PULL_REQUESTS_QUERY, variables=dict(owner="openedx", name="open-edx-proposals"))
-    json_save(results, "out_prs.json")
+    """
+    Summarize all the things!
+
+    Writes results.html
+
+    """
+    # results = await gql_execute(
+    #   PULL_REQUESTS_QUERY,
+    #   variables=dict(owner="openedx", name="open-edx-proposals"),
+    # )
+    # json_save(results, "out_prs.json")
+    summarizer = Summarizer(since=SINCE)
     tasks = [
-        *(get_repo_issues(repo, since=SINCE) for repo in ISSUES),
-        *(get_project_issues(org, number, homerepo, SINCE) for org, number, homerepo in PROJECTS),
+        *(itertools.starmap(summarizer.get_repo_issues, ISSUES)),
+        *(itertools.starmap(summarizer.get_project_issues, PROJECTS)),
     ]
     results = await asyncio.gather(*tasks)
     json_save(results, "out_results.json")
     html = render_jinja("results.html.j2", results=results, since=SINCE)
-    with open("results.html", "w") as html_out:
+    with open("results.html", "w", encoding="utf-8") as html_out:
         html_out.write(html)
 
 asyncio.run(main())
