@@ -29,6 +29,7 @@
   }
   .icon.created, .icon.closed {
     color: black;
+    cursor: default;
   }
   a {
     text-decoration: none;
@@ -63,8 +64,8 @@
         {% for issue in issues -%}
           <li class="{{ issue.state|lower }}">
 
-            {% if issue.reasonCreated %}<span class="icon created">&Star;{% else %}<span class="icon">&ndash;{% endif %}</span>
-            {% if issue.reasonClosed %}<span class="icon closed">&times;{% else %}<span class="icon">&ndash;{% endif %}</span>
+            {% if issue.reasonCreated %}<span class="icon created" title="newly created">&Star;{% else %}<span class="icon">&ndash;{% endif %}</span>
+            {% if issue.reasonClosed %}<span class="icon closed" title="newly closed">&times;{% else %}<span class="icon">&ndash;{% endif %}</span>
 
             <a href="{{ issue.url }}"><b>{{issue.title}}</b> #{{ issue.number }}</a>
             [{{ issue.author.login }}]
