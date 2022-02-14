@@ -11,7 +11,7 @@ from python_graphql_client import GraphqlClient
 client = GraphqlClient(endpoint="https://api.github.com/graphql")
 TOKEN = os.environ.get("GITHUB_TOKEN", "")
 
-# ... on Blob  is an inline fragment:
+# ... on Blob  is an inline fragment on a union:
 # https://graphql.org/learn/queries/#inline-fragments
 
 QUERY = """\
@@ -40,15 +40,14 @@ QUERY = """\
     }
 """
 
-#branch = "open-release/maple.master"
-branch = "HEAD"
+#BRANCH = "open-release/maple.master"
+BRANCH = "HEAD"
 repos = []
 for org in ["edx", "openedx"]:
-    vars = {"organization": org, "openedx_yaml": f"{branch}:openedx.yaml"}
-    after = None
+    variables = {"organization": org, "openedx_yaml": f"{BRANCH}:openedx.yaml"}
     while True:
         data = client.execute(
-                query=QUERY, variables=vars,
+                query=QUERY, variables=variables,
                 headers={"Authorization": f"Bearer {TOKEN}"},
             )
         if "errors" in data:
@@ -60,7 +59,7 @@ for org in ["edx", "openedx"]:
         print(f'{len(repos)} repos')
         if not repo_data["pageInfo"]["hasNextPage"]:
             break
-        vars["after"] = repo_data["pageInfo"]["endCursor"]
+        variables["after"] = repo_data["pageInfo"]["endCursor"]
 
 release_repos = []
 for repo in repos:
