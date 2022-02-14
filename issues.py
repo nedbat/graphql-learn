@@ -7,6 +7,7 @@ import operator
 import os
 from pathlib import Path
 
+import wcag_contrast_ratio
 import glom
 import jinja2
 import python_graphql_client
@@ -343,9 +344,10 @@ def datetime_format(value, format="%m-%d %H:%M"):
 def textcolor(bg):
     """Calculate a text color for a background color `bg`."""
     r, g, b = bg[0:2], bg[2:4], bg[4:6]
-    r, g, b = int(r, 16) / 256, int(g, 16) / 256, int(b, 16) / 256
-    lightness = colorsys.rgb_to_hsv(r, g, b)[2]
-    return "black" if lightness > .5 else "white"
+    rgb = int(r, 16) / 256, int(g, 16) / 256, int(b, 16) / 256
+    bcontrast = wcag_contrast_ratio.rgb(rgb, (0, 0, 0))
+    wcontrast = wcag_contrast_ratio.rgb(rgb, (1, 1, 1))
+    return "black" if bcontrast > wcontrast else "white"
 
 def render_jinja(template_filename, **vars):
     jenv = jinja2.Environment(loader=jinja2.FileSystemLoader(Path(__file__).parent))
