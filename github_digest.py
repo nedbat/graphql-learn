@@ -9,260 +9,9 @@ import os
 
 import glom
 
-from graphql_helpers import GraphqlHelper
+from graphql_helpers import build_query, GraphqlHelper
 from helpers import json_save
 from jinja_helpers import render_jinja
-
-
-REPO_DATA_FRAGMENT = """\
-fragment repoData on Repository {
-    owner { login }
-    name
-    nameWithOwner
-    url
-}
-"""
-
-AUTHOR_DATA_FRAGMENT = """\
-fragment authorData on Actor {
-    login
-    url
-}
-"""
-
-COMMENT_DATA_FRAGMENT = """\
-fragment commentData on IssueComment {
-    id
-    url
-    body
-    updatedAt
-    author {
-        ...authorData
-    }
-}
-"""
-
-# isn't there a way to share this with COMMENT_DATA_FRAGMENT above?
-PR_REVIEW_COMMENT_DATA_FRAGMENT = """\
-fragment prReviewCommentData on PullRequestReviewComment {
-    id
-    url
-    body
-    updatedAt
-    author {
-        ...authorData
-    }
-}
-"""
-
-ISSUE_DATA_FRAGMENT = """\
-fragment issueData on Issue {
-    repository {
-        ...repoData
-    }
-    number
-    url
-    title
-    state
-    createdAt
-    updatedAt
-    closedAt
-    author {
-        ...authorData
-    }
-    body
-    comments (last: 100) {
-        totalCount
-        nodes {
-            ...commentData
-        }
-    }
-    projectNextItems(first: 100) {
-        nodes {
-            project {
-                owner {
-                    ... on User { login }
-                    ... on Organization { login }
-                }
-                number
-            }
-        }
-    }
-    labels(first:10) {
-        nodes {
-            color
-            name
-        }
-    }
-    # Issues have timelineItems, but added or removed from projectNext isn't listed.
-}
-"""
-
-REPO_ISSUES_QUERY = """\
-query getRepoIssues(
-    $owner: String!
-    $name: String!
-    $since: String!
-    $after: String
-) {
-    repository (owner: $owner, name: $name) {
-        ...repoData
-        issues (first: 100, filterBy: {since: $since}, after: $after) {
-            pageInfo { hasNextPage, endCursor }
-            nodes {
-                ...issueData
-            }
-        }
-    }
-}
-""" + REPO_DATA_FRAGMENT + ISSUE_DATA_FRAGMENT + AUTHOR_DATA_FRAGMENT + COMMENT_DATA_FRAGMENT
-
-COMMENTS_QUERY = """\
-query getIssueComments(
-    $owner: String!
-    $name: String!
-    $number: Int!
-    $after: String
-) {
-    repository (owner: $owner, name: $name) {
-        issue (number: $number) {
-            comments (first: 100, after: $after) {
-                pageInfo { hasNextPage, endCursor }
-                nodes {
-                    ...commentData
-                }
-            }
-        }
-    }
-}
-""" + AUTHOR_DATA_FRAGMENT + COMMENT_DATA_FRAGMENT
-
-PROJECT_ISSUES_QUERY = """\
-query getProjectIssues(
-    $org: String!
-    $projectNumber: Int!
-    $after: String
-) {
-    organization(login: $org) {
-        project: projectNext(number: $projectNumber) {
-            title
-            url
-            items (first: 100, after: $after) {
-                pageInfo { hasNextPage, endCursor }
-                nodes {
-                    content {
-                        ... on Issue {
-                            ...issueData
-                        }
-                        # ... on PullRequest {
-                        #     number
-                        # }
-                    }
-                }
-            }
-        }
-    }
-}
-""" + REPO_DATA_FRAGMENT + ISSUE_DATA_FRAGMENT + AUTHOR_DATA_FRAGMENT + COMMENT_DATA_FRAGMENT
-
-PULL_REQUESTS_QUERY = """\
-query getPullRequests(
-    $owner: String!
-    $name: String!
-    $after: String
-) {
-    repository (owner: $owner, name: $name) {
-        ...repoData
-        pullRequests (
-            first: 10
-            orderBy: { field: UPDATED_AT, direction: DESC }
-            after: $after
-        ) {
-            pageInfo { hasNextPage, endCursor }
-            nodes {
-                repository {
-                    ...repoData
-                }
-                author {
-                    ...authorData
-                }
-                number
-                title
-                url
-                createdAt
-                updatedAt
-                closedAt
-                merged
-                mergedAt
-                labels(first:10) {
-                    nodes {
-                        color
-                        name
-                    }
-                }
-                comments (first: 100) {
-                    totalCount
-                    nodes {
-                        ...commentData
-                    }
-                }
-                latestOpinionatedReviews (first: 100) {
-                    totalCount
-                    nodes {
-                        id
-                        url
-                        state
-                        author {
-                            ...authorData
-                        }
-                        body
-                        updatedAt
-                        comments (first: 100) {
-                            totalCount
-                            nodes {
-                                ...prReviewCommentData
-                            }
-                        }
-                    }
-                }
-                latestReviews (first: 100) {
-                    totalCount
-                    nodes {
-                        id
-                        url
-                        state
-                        author {
-                            ...authorData
-                        }
-                        body
-                        updatedAt
-                        comments (first: 100) {
-                            totalCount
-                            nodes {
-                                ...prReviewCommentData
-                            }
-                        }
-                    }
-                }
-                reviewThreads (first: 100) {
-                    totalCount
-                    nodes {
-                        comments (first: 100) {
-                            totalCount
-                            nodes {
-                                ...prReviewCommentData
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-""" + (
-    REPO_DATA_FRAGMENT + AUTHOR_DATA_FRAGMENT +
-    COMMENT_DATA_FRAGMENT + PR_REVIEW_COMMENT_DATA_FRAGMENT
-)
 
 
 class Summarizer:
@@ -284,7 +33,7 @@ class Summarizer:
         """
         owner, name = repo.split("/")
         repo, issues = await self.gql.nodes(
-            query=REPO_ISSUES_QUERY,
+            query=build_query("repo_issues.graphql"),
             path="repository.issues",
             variables=dict(owner=owner, name=name, since=self.since),
         )
@@ -307,7 +56,7 @@ class Summarizer:
             home_repo (str): the owner/name of a repo that most issues are in.
         """
         project, project_data = await self.gql.nodes(
-            query=PROJECT_ISSUES_QUERY,
+            query=build_query("project_issues.graphql"),
             path="organization.project.items",
             variables=dict(org=org, projectNumber=number),
         )
@@ -332,7 +81,7 @@ class Summarizer:
         """
         owner, name = repo.split("/")
         repo, pulls = await self.gql.nodes(
-            query=PULL_REQUESTS_QUERY,
+            query=build_query("repo_pull_requests.graphql"),
             path="repository.pullRequests",
             variables=dict(owner=owner, name=name),
             donefn=(lambda nodes: nodes[-1]["updatedAt"] < SINCE),
@@ -384,7 +133,7 @@ class Summarizer:
             if iss["comments"]["totalCount"] > len(iss["comments"]["nodes"]):
                 queried_issues.append(iss)
                 comments = self.gql.nodes(
-                    query=COMMENTS_QUERY,
+                    query=build_query("issue_comments.graphql"),
                     path="repository.issue.comments",
                     variables=dict(
                         owner=iss["repository"]["owner"]["login"],

@@ -1,0 +1,9 @@
+fragment commentData on IssueComment {
+  id
+  url
+  body
+  updatedAt
+  author {
+    ...authorData   # fragment: author_frag.graphql
+  }
+}

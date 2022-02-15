@@ -1,0 +1,10 @@
+# isn't there a way to share this with comment_frag.graphql?
+fragment prReviewCommentData on PullRequestReviewComment {
+  id
+  url
+  body
+  updatedAt
+  author {
+    ...authorData # fragment: author_frag.graphql
+  }
+}

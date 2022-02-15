@@ -3,6 +3,7 @@ GraphQL helpers.
 """
 
 import itertools
+import re
 
 import glom
 import python_graphql_client
@@ -68,3 +69,26 @@ class GraphqlHelper:
         # Remove the nodes from the top-level data we return, to keep things clean.
         fetched["nodes"] = []
         return data, nodes
+
+
+def build_query(gql_filename):
+    """Read a GraphQL file, and complete it with requested fragments."""
+    filenames = [gql_filename]
+    query = []
+
+    seen_filenames = set()
+    while filenames:
+        next_filenames = []
+        for filename in filenames:
+            with open(filename, encoding="utf-8") as gql_file:
+                gtext = gql_file.read()
+            query.append(gtext)
+
+            for match in re.finditer(r"#\s*fragment: ([.\w]+)", gtext):
+                frag_name = match[1]
+                if frag_name not in seen_filenames:
+                    next_filenames.append(frag_name)
+                    seen_filenames.add(frag_name)
+        filenames = next_filenames
+
+    return "\n".join(query)
