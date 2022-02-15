@@ -27,12 +27,24 @@ AUTHOR_DATA_FRAGMENT = """\
 fragment authorData on Actor {
     login
     url
-    #avatarUrl
 }
 """
 
 COMMENT_DATA_FRAGMENT = """\
 fragment commentData on IssueComment {
+    id
+    url
+    body
+    updatedAt
+    author {
+        ...authorData
+    }
+}
+"""
+
+# isn't there a way to share this with COMMENT_DATA_FRAGMENT above?
+PR_REVIEW_COMMENT_DATA_FRAGMENT = """\
+fragment prReviewCommentData on PullRequestReviewComment {
     id
     url
     body
@@ -182,6 +194,12 @@ query getPullRequests(
                 closedAt
                 merged
                 mergedAt
+                labels(first:10) {
+                    nodes {
+                        color
+                        name
+                    }
+                }
                 comments (first: 100) {
                     totalCount
                     nodes {
@@ -194,17 +212,15 @@ query getPullRequests(
                         id
                         url
                         state
-                        author { login }
+                        author {
+                            ...authorData
+                        }
                         body
                         updatedAt
                         comments (first: 100) {
                             totalCount
                             nodes {
-                                id
-                                author {login}
-                                body
-                                url
-                                updatedAt
+                                ...prReviewCommentData
                             }
                         }
                     }
@@ -215,17 +231,15 @@ query getPullRequests(
                         id
                         url
                         state
-                        author { login }
+                        author {
+                            ...authorData
+                        }
                         body
                         updatedAt
                         comments (first: 100) {
                             totalCount
                             nodes {
-                                id
-                                author {login}
-                                body
-                                url
-                                updatedAt
+                                ...prReviewCommentData
                             }
                         }
                     }
@@ -236,11 +250,7 @@ query getPullRequests(
                         comments (first: 100) {
                             totalCount
                             nodes {
-                                id
-                                author { login }
-                                body
-                                url
-                                updatedAt
+                                ...prReviewCommentData
                             }
                         }
                     }
@@ -249,7 +259,10 @@ query getPullRequests(
         }
     }
 }
-""" + REPO_DATA_FRAGMENT + AUTHOR_DATA_FRAGMENT + COMMENT_DATA_FRAGMENT
+""" + (
+    REPO_DATA_FRAGMENT + AUTHOR_DATA_FRAGMENT +
+    COMMENT_DATA_FRAGMENT + PR_REVIEW_COMMENT_DATA_FRAGMENT
+)
 
 
 class Summarizer:
