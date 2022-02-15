@@ -47,7 +47,7 @@ class GraphqlHelper:
             raise Exception("GraphQL query returned null")
         return data
 
-    async def nodes(self, query, path, variables=None):
+    async def nodes(self, query, path, variables=None, donefn=None):
         """
         Execute a GraphQL query, and follow the pagination to get all the nodes.
 
@@ -61,6 +61,8 @@ class GraphqlHelper:
             fetched = glom.glom(data, f"data.{path}")
             nodes.extend(fetched["nodes"])
             if not fetched["pageInfo"]["hasNextPage"]:
+                break
+            if donefn is not None and donefn(fetched["nodes"]):
                 break
             variables["after"] = fetched["pageInfo"]["endCursor"]
         # Remove the nodes from the top-level data we return, to keep things clean.

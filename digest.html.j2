@@ -29,7 +29,7 @@
     width: .75em;
     color: #ccc;
   }
-  .icon.created, .icon.closed {
+  .icon.created, .icon.closed, .icon.merged {
     color: black;
     cursor: default;
   }
@@ -56,26 +56,29 @@
   {% for thing, issues in results -%}
     <li>
       <b><a href="{{ thing.url }}">
-      {% if thing.kind == "repo" %}
+      {% if thing.container_kind == "repo" %}
         {{ thing.nameWithOwner }}
-      {% elif thing.kind == "project" %}
+      {% elif thing.container_kind == "project" %}
         {{ thing.title }}
       {% endif %}
       </a></b>
-      {{ thing.kind }}
+      {{ thing.container_kind }} {{ thing.kind }}
       <ul class="issue">
         {% for issue in issues -%}
           <li class="{{ issue.state|lower }}">
 
             {% if issue.reasonCreated %}<span class="icon created" title="newly created">&Star;{% else %}<span class="icon">&ndash;{% endif %}</span>
-            {% if issue.reasonClosed %}<span class="icon closed" title="newly closed">&times;{% else %}<span class="icon">&ndash;{% endif %}</span>
+            {% if issue.reasonMerged %}<span class="icon merged" title="newly merged">&#x2713;{% else %}
+              {% if issue.reasonClosed %}<span class="icon closed" title="newly closed">&times;{% else %}<span class="icon">&ndash;{% endif %}{% endif %}</span>
 
             <a href="{{ issue.url }}"><b>{{issue.title}}</b> #{{ issue.number }}</a>
             [{{ issue.author.login }}]
 
-            {% for label in issue.labels.nodes %}
-              <span class="label" style="background: #{{label.color}}; color: {{label.color|textcolor}}">{{ label.name }}</span>
-            {% endfor %}
+            {% if issue.labels %}
+              {% for label in issue.labels.nodes %}
+                <span class="label" style="background: #{{label.color}}; color: {{label.color|textcolor}}">{{ label.name }}</span>
+              {% endfor %}
+            {% endif %}
 
             {% if issue.other_repo %}
               <span class="homerepo">{{ issue.repository.nameWithOwner }}</span>
@@ -84,11 +87,14 @@
             <p>{{ issue.body|truncate(120) }}</p>
 
             <ul class="comment">
-              {% for comment in issue.comments.nodes -%}
+              {% for comment in issue.comments_to_show -%}
                 <li>
                   {# <img src="{{comment.author.avatarUrl}}&size=20"/> #}
                   <a href="{{ comment.url }}">{{ comment.updatedAt|datetime() }}</a>
                   [{{ comment.author.login }}]
+                  {% if comment.state %}
+                    <i>({{ comment.state|lower }})</i>
+                  {% endif %}
                   {{ comment.body|trim|truncate(120) }}
                 </li>
               {% endfor %}
