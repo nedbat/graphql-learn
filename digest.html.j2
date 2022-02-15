@@ -51,7 +51,7 @@
   }
   </style>
 <body>
-<h1>Issue updates since {{ since|datetime("%Y-%m-%d") }}</h1>
+<h1>Updates since {{ since|datetime("%Y-%m-%d") }}</h1>
 <ul class="repo">
   {% for thing, issues in results -%}
     <li>
@@ -92,10 +92,10 @@
                   {# <img src="{{comment.author.avatarUrl}}&size=20"/> #}
                   <a href="{{ comment.url }}">{{ comment.updatedAt|datetime() }}</a>
                   [{{ comment.author.login }}]
-                  {% if comment.state %}
-                    <i>({{ comment.state|lower }})</i>
-                  {% endif %}
                   {{ comment.body|trim|truncate(120) }}
+                  {% if comment.review_state %}
+                    <i>(review: {{ comment.review_state|lower|replace("_", " ") }})</i>
+                  {% endif %}
                 </li>
               {% endfor %}
             </ul>

@@ -33,6 +33,7 @@ fragment authorData on Actor {
 
 COMMENT_DATA_FRAGMENT = """\
 fragment commentData on IssueComment {
+    id
     url
     body
     updatedAt
@@ -191,6 +192,7 @@ query getPullRequests(
                     totalCount
                     nodes {
                         id
+                        url
                         state
                         author { login }
                         body
@@ -198,6 +200,7 @@ query getPullRequests(
                         comments (first: 100) {
                             totalCount
                             nodes {
+                                id
                                 author {login}
                                 body
                                 url
@@ -210,6 +213,7 @@ query getPullRequests(
                     totalCount
                     nodes {
                         id
+                        url
                         state
                         author { login }
                         body
@@ -217,6 +221,7 @@ query getPullRequests(
                         comments (first: 100) {
                             totalCount
                             nodes {
+                                id
                                 author {login}
                                 body
                                 url
@@ -231,6 +236,7 @@ query getPullRequests(
                         comments (first: 100) {
                             totalCount
                             nodes {
+                                id
                                 author { login }
                                 body
                                 url
@@ -320,19 +326,32 @@ class Summarizer:
         )
         pulls = self._trim_since(pulls)
         for pull in pulls:
-            # I don't understand the difference between latestReviews and latestOpinionatedReviews,
-            # but they duplicate each other, so combine them.
-            reviews = {}
-            for rev in pull["latestReviews"]["nodes"]:
-                reviews[rev["id"]] = rev
-            for rev in pull["latestOpinionatedReviews"]["nodes"]:
-                reviews[rev["id"]] = rev
+            # Pull requests have complex trees of data, with comments in
+            # multiple places, and duplications.  Reviews can also be finished
+            # with no comment, but we want them to appear in the digest.
+            comments = {}
+            reviews = itertools.chain(
+                pull["latestReviews"]["nodes"],
+                pull["latestOpinionatedReviews"]["nodes"],
+            )
+            for rev in reviews:
+                ncom = 0
+                for com in rev["comments"]["nodes"]:
+                    com = comments.setdefault(com["id"], dict(com))
+                    com["review_state"] = rev["state"]
+                    ncom += 1
+                if ncom == 0:
+                    # A completed review with no comment, make it into a comment.
+                    com = comments.setdefault(rev["id"], dict(rev))
+                    com["review_state"] = rev["state"]
+            for thread in pull["reviewThreads"]["nodes"]:
+                for com in thread["comments"]["nodes"]:
+                    comments.setdefault(com["id"], com)
+            for com in pull["comments"]["nodes"]:
+                comments.setdefault(com["id"], com)
 
-            pull["comments_to_show"] = self._trim_since([
-                *pull["comments"]["nodes"],
-                *reviews.values(),
-                *[c for rev in reviews.values() for c in rev["comments"]["nodes"]],
-            ])
+            pull["comments_to_show"] = self._trim_since(comments.values())
+
         self._add_reasons(pulls)
         repo = glom.glom(repo, "data.repository")
         repo["container_kind"] = "repo"
@@ -407,9 +426,6 @@ async def main():
 
     """
     summarizer = Summarizer(since=SINCE)
-    _, prs = await summarizer.get_pull_requests("openedx/open-edx-proposals")
-    json_save(prs, "out_prs.json")
-
     tasks = [
         *(itertools.starmap(summarizer.get_repo_issues, ISSUES)),
         *(itertools.starmap(summarizer.get_project_issues, PROJECTS)),
