@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <head>
-  <title>Issue updates</title>
+  <title>Activity since {{ since|datetime("%Y-%m-%d") }}</title>
   <style>
   body {
     font-family: sans-serif;
@@ -51,7 +51,7 @@
   }
   </style>
 <body>
-<h1>Updates since {{ since|datetime("%Y-%m-%d") }}</h1>
+<h1>Activity since {{ since|datetime("%Y-%m-%d") }}</h1>
 <ul class="repo">
   {% for thing, issues in results -%}
     <li>
