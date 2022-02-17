@@ -161,7 +161,7 @@ class Summarizer:
             iss["reasonMerged"] = bool(iss.get("mergedAt") and (iss["mergedAt"] > self.since))
 
 
-SINCE = "2022-02-14T00:00:00"
+SINCE = "2022-02-15T00:00:00"
 
 # Issues in repos: arguments for get_repo_issues
 ISSUES = [
