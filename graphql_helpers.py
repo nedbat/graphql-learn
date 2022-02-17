@@ -31,7 +31,7 @@ class GraphqlHelper:
         args = ", ".join(f"{k}: {v!r}" for k, v in variables.items())
         print(query.splitlines()[0] + args + ")")
         data = await self.client.execute_async(query=query, variables=variables)
-        json_save(data, next(JSON_NAMES))
+        await json_save(data, next(JSON_NAMES))
         if "message" in data:
             raise Exception(data["message"])
         if "errors" in data:

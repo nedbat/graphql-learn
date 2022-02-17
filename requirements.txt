@@ -1,5 +1,6 @@
-wcag-contrast-ratio
+aiofiles
 glom
 jinja2
 python-graphql-client
 pyyaml
+wcag-contrast-ratio

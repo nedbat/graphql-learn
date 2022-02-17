@@ -4,7 +4,9 @@ Misc helpers.
 
 import json
 
-def json_save(data, filename):
+import aiofiles
+
+async def json_save(data, filename):
     """Write `data` to `filename` as JSON."""
-    with open(filename, "w", encoding="utf-8") as json_out:
-        json.dump(data, json_out, indent=4)
+    async with aiofiles.open(filename, "w", encoding="utf-8") as json_out:
+        await json_out.write(json.dumps(data, indent=4))

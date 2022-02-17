@@ -7,6 +7,7 @@ import itertools
 import operator
 import os
 
+import aiofiles
 import glom
 
 from graphql_helpers import build_query, GraphqlHelper
@@ -194,9 +195,9 @@ async def main():
         *(itertools.starmap(summarizer.get_pull_requests, PULL_REQUESTS)),
     ]
     results = await asyncio.gather(*tasks)
-    json_save(results, "out_digest.json")
+    await json_save(results, "out_digest.json")
     html = render_jinja("digest.html.j2", results=results, since=SINCE)
-    with open("digest.html", "w", encoding="utf-8") as html_out:
-        html_out.write(html)
+    async with aiofiles.open("digest.html", "w", encoding="utf-8") as html_out:
+        await html_out.write(html)
 
 asyncio.run(main())
