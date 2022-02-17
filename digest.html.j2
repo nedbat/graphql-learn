@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <head>
-  {# &#x1F5EA; is the double speech bubble #}
-  <title>&#x1F5EA; Activity since {{ since|datetime("%Y-%m-%d") }}</title>
+  {% set double_bubble = "&#x1F5EA" %}
+  <title>{{ double_bubble }} Activity since {{ since|datetime("%Y-%m-%d") }}</title>
   <style>
   body {
     font-family: sans-serif;
@@ -106,7 +106,7 @@
                 {% for comment in issue.comments_to_show -%}
                   <li>
                     <a href="{{ comment.url }}" title="{{ comment.updatedAt|datetime() }}">
-                      &#x1F5EA;&nbsp;{{ comment.author.login }}</a>{# -#}
+                      {{ double_bubble }}&nbsp;{{ comment.author.login }}</a>{# -#}
                     {%- if comment.body %}: {{ comment.body|trim|truncate(100) }}{% endif -%}
                     {%- if comment.review_state -%}
                       &nbsp;<i>(review:&nbsp;{{ comment.review_state|lower|replace("_", " ") }})</i>
