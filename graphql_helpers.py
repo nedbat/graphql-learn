@@ -3,6 +3,7 @@ GraphQL helpers.
 """
 
 import itertools
+import os
 import re
 
 import glom
@@ -31,7 +32,9 @@ class GraphqlHelper:
         args = ", ".join(f"{k}: {v!r}" for k, v in variables.items())
         print(query.splitlines()[0] + args + ")")
         data = await self.client.execute_async(query=query, variables=variables)
-        await json_save(data, next(JSON_NAMES))
+        # $set_env.py: DIGEST_SAVE_RESPONSES - save every query response in a JSON file.
+        if int(os.environ.get("DIGEST_SAVE_RESPONSES", 0)):
+            await json_save(data, next(JSON_NAMES))
         if "message" in data:
             raise Exception(data["message"])
         if "errors" in data:

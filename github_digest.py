@@ -195,7 +195,9 @@ async def main():
         *(itertools.starmap(summarizer.get_pull_requests, PULL_REQUESTS)),
     ]
     results = await asyncio.gather(*tasks)
-    await json_save(results, "out_digest.json")
+    # $set_env.py: DIGEST_SAVE_RESULT - save digest data in a JSON file.
+    if int(os.environ.get("DIGEST_SAVE_RESULT", 0)):
+        await json_save(results, "out_digest.json")
     html = render_jinja("digest.html.j2", results=results, since=SINCE)
     async with aiofiles.open("digest.html", "w", encoding="utf-8") as html_out:
         await html_out.write(html)
