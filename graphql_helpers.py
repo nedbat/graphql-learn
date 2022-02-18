@@ -6,8 +6,8 @@ import itertools
 import os
 import re
 
+import aiohttp
 import glom
-import python_graphql_client
 
 from helpers import json_save
 
@@ -20,10 +20,19 @@ class GraphqlHelper:
     """
 
     def __init__(self, endpoint, token):
-        self.client = python_graphql_client.GraphqlClient(
-            endpoint=endpoint,
-            headers={"Authorization": f"Bearer {token}"},
-        )
+        self.endpoint = endpoint
+        self.headers = {"Authorization": f"Bearer {token}"}
+
+    async def raw_execute(self, query, variables=None):
+        """
+        Execute one GraphQL query, and return the JSON data.
+        """
+        jbody = {"query": query}
+        if variables:
+            jbody["variables"] = variables
+        async with aiohttp.ClientSession(headers=self.headers, raise_for_status=True) as session:
+            async with session.post(self.endpoint, json=jbody) as response:
+                return await response.json()
 
     async def execute(self, query, variables=None):
         """
@@ -31,10 +40,13 @@ class GraphqlHelper:
         """
         args = ", ".join(f"{k}: {v!r}" for k, v in variables.items())
         print(query.splitlines()[0] + args + ")")
-        data = await self.client.execute_async(query=query, variables=variables)
+
+        data = await self.raw_execute(query=query, variables=variables)
+
         # $set_env.py: DIGEST_SAVE_RESPONSES - save every query response in a JSON file.
         if int(os.environ.get("DIGEST_SAVE_RESPONSES", 0)):
             await json_save(data, next(JSON_NAMES))
+
         if "message" in data:
             raise Exception(data["message"])
         if "errors" in data:
@@ -49,6 +61,7 @@ class GraphqlHelper:
         if "data" in data and data["data"] is None:
             # Another kind of failure response?
             raise Exception("GraphQL query returned null")
+
         return data
 
     async def nodes(self, query, path, variables=None, donefn=None):
