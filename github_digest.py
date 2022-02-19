@@ -8,7 +8,7 @@ import operator
 import os
 
 import aiofiles
-import glom
+from glom import glom as g
 
 from graphql_helpers import build_query, GraphqlHelper
 from helpers import json_save
@@ -42,7 +42,7 @@ class Summarizer:
         self._add_reasons(issues)
         for iss in issues:
             iss["comments_to_show"] = iss["comments"]["nodes"]
-        repo = glom.glom(repo, "data.repository")
+        repo = g(repo, "data.repository")
         repo["container_kind"] = "repo"
         repo["kind"] = "issues"
         return repo, issues
@@ -68,7 +68,7 @@ class Summarizer:
         for iss in issues:
             iss["other_repo"] = (iss["repository"]["nameWithOwner"] != home_repo)
             iss["comments_to_show"] = iss["comments"]["nodes"]
-        project = glom.glom(project, "data.organization.project")
+        project = g(project, "data.organization.project")
         project["container_kind"] = "project"
         project["kind"] = "issues"
         return project, issues
@@ -116,7 +116,7 @@ class Summarizer:
             pull["comments_to_show"] = self._trim_since(comments.values())
 
         self._add_reasons(pulls)
-        repo = glom.glom(repo, "data.repository")
+        repo = g(repo, "data.repository")
         repo["container_kind"] = "repo"
         repo["kind"] = "pull requests"
         return repo, pulls

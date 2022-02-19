@@ -7,7 +7,7 @@ import os
 import re
 
 import aiohttp
-import glom
+from glom import glom as g
 
 from helpers import json_save
 
@@ -75,7 +75,7 @@ class GraphqlHelper:
         variables = dict(variables)
         while True:
             data = await self.execute(query, variables)
-            fetched = glom.glom(data, f"data.{path}")
+            fetched = g(data, f"data.{path}")
             nodes.extend(fetched["nodes"])
             if not fetched["pageInfo"]["hasNextPage"]:
                 break
