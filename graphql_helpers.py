@@ -14,6 +14,7 @@ from helpers import json_save
 
 JSON_NAMES = (f"out_{i:02}.json" for i in itertools.count())
 
+
 class GraphqlHelper:
     """
     A helper for GraphQL, including error handling and pagination.
@@ -30,7 +31,9 @@ class GraphqlHelper:
         jbody = {"query": query}
         if variables:
             jbody["variables"] = variables
-        async with aiohttp.ClientSession(headers=self.headers, raise_for_status=True) as session:
+        async with aiohttp.ClientSession(
+            headers=self.headers, raise_for_status=True
+        ) as session:
             async with session.post(self.endpoint, json=jbody) as response:
                 return await response.json()
 

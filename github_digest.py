@@ -22,6 +22,7 @@ class Summarizer:
     """
     Use GitHub GraphQL to get data about recent changes.
     """
+
     def __init__(self, since):
         self.since = since.strftime("%Y-%m-%dT%H:%M:%S")
         token = os.environ.get("GITHUB_TOKEN", "")
@@ -69,7 +70,7 @@ class Summarizer:
         issues = await self._populate_issue_comments(issues)
         self._add_reasons(issues)
         for iss in issues:
-            iss["other_repo"] = (iss["repository"]["nameWithOwner"] != home_repo)
+            iss["other_repo"] = iss["repository"]["nameWithOwner"] != home_repo
             iss["comments_to_show"] = iss["comments"]["nodes"]
         project = g(project, "data.organization.project")
         project["container_kind"] = "project"
@@ -126,11 +127,11 @@ class Summarizer:
 
     def methods_from_url(self, url):
         """Dispatch to a get_* method from a GitHub url."""
-        if (m := re.fullmatch(r"https://github.com/(.*?)/(.*?)/issues", url)):
+        if m := re.fullmatch(r"https://github.com/(.*?)/(.*?)/issues", url):
             return self.get_repo_issues, m[1], m[2]
-        elif (m := re.fullmatch(r"https://github.com/(.*?)/(.*?)/pulls", url)):
+        elif m := re.fullmatch(r"https://github.com/(.*?)/(.*?)/pulls", url):
             return self.get_pull_requests, m[1], m[2]
-        elif (m := re.fullmatch(r"https://github.com/orgs/(.*?)/projects/(\d+)", url)):
+        elif m := re.fullmatch(r"https://github.com/orgs/(.*?)/projects/(\d+)", url):
             return self.get_project_issues, m[1], int(m[2])
         else:
             raise Exception(f"Can't understand URL {url!r}")
@@ -154,7 +155,7 @@ class Summarizer:
                         owner=iss["repository"]["owner"]["login"],
                         name=iss["repository"]["name"],
                         number=iss["number"],
-                    )
+                    ),
                 )
                 issue_queries.append(comments)
         commentss = await asyncio.gather(*issue_queries)
@@ -172,8 +173,12 @@ class Summarizer:
         # Why were these issues in the list?
         for iss in issues:
             iss["reasonCreated"] = iss["createdAt"] > self.since
-            iss["reasonClosed"] = bool(iss["closedAt"] and (iss["closedAt"] > self.since))
-            iss["reasonMerged"] = bool(iss.get("mergedAt") and (iss["mergedAt"] > self.since))
+            iss["reasonClosed"] = bool(
+                iss["closedAt"] and (iss["closedAt"] > self.since)
+            )
+            iss["reasonMerged"] = bool(
+                iss.get("mergedAt") and (iss["mergedAt"] > self.since)
+            )
 
 
 async def make_digest(since, items, digest):
@@ -188,6 +193,7 @@ async def make_digest(since, items, digest):
     async with aiofiles.open(digest, "w", encoding="utf-8") as html_out:
         await html_out.write(html)
 
+
 async def main():
     """
     Summarize all the things!
@@ -199,5 +205,6 @@ async def main():
         config = yaml.safe_load(y)
     tasks = [make_digest(**spec) for spec in config]
     await asyncio.gather(*tasks)
+
 
 asyncio.run(main())

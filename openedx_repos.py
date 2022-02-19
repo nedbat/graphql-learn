@@ -40,23 +40,24 @@ QUERY = """\
     }
 """
 
-#BRANCH = "open-release/maple.master"
+# BRANCH = "open-release/maple.master"
 BRANCH = "HEAD"
 repos = []
 for org in ["edx", "openedx"]:
     variables = {"organization": org, "openedx_yaml": f"{BRANCH}:openedx.yaml"}
     while True:
         data = client.execute(
-                query=QUERY, variables=variables,
-                headers={"Authorization": f"Bearer {TOKEN}"},
-            )
+            query=QUERY,
+            variables=variables,
+            headers={"Authorization": f"Bearer {TOKEN}"},
+        )
         if "errors" in data:
             print(data["errors"])
             break
         repo_data = glom(data, "data.organization.repositories")
         nodes = repo_data["nodes"]
         repos.extend(n for n in nodes if n["openedx_yaml"])
-        print(f'{len(repos)} repos')
+        print(f"{len(repos)} repos")
         if not repo_data["pageInfo"]["hasNextPage"]:
             break
         variables["after"] = repo_data["pageInfo"]["endCursor"]
