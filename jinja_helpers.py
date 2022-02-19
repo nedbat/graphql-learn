@@ -10,8 +10,10 @@ import jinja2
 
 
 def datetime_format(value, fmt="%m-%d %H:%M"):
-    """Format an ISO datetime string, for Jinja filtering."""
-    return datetime.datetime.fromisoformat(value.replace("Z", "+00:00")).strftime(fmt)
+    """Format a datetime or ISO datetime string, for Jinja filtering."""
+    if isinstance(value, str):
+        value = datetime.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return value.strftime(fmt)
 
 def textcolor(bg_color):
     """Calculate a text color for a background color `bg_color`."""

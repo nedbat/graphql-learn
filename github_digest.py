@@ -3,15 +3,18 @@ Summarize issue activity in GitHub repos and projects.
 """
 
 import asyncio
+import datetime
 import itertools
 import operator
 import os
+import re
 
 import aiofiles
+import yaml
 from glom import glom as g
 
 from graphql_helpers import build_query, GraphqlHelper
-from helpers import json_save
+from helpers import json_save, parse_timedelta
 from jinja_helpers import render_jinja
 
 
@@ -20,19 +23,19 @@ class Summarizer:
     Use GitHub GraphQL to get data about recent changes.
     """
     def __init__(self, since):
-        self.since = since
+        self.since = since.strftime("%Y-%m-%dT%H:%M:%S")
         token = os.environ.get("GITHUB_TOKEN", "")
         self.gql = GraphqlHelper("https://api.github.com/graphql", token)
 
-    async def get_repo_issues(self, repo):
+    async def get_repo_issues(self, owner, name):
         """
         Get issues from a repo updated since a date, with comments since that date.
 
         Args:
-            repo (str): a combined owner/name of a repo, like "openedx/edx-platform".
+            owner (str): the owner of the repo.
+            name (str): the name of the repo.
 
         """
-        owner, name = repo.split("/")
         repo, issues = await self.gql.nodes(
             query=build_query("repo_issues.graphql"),
             path="repository.issues",
@@ -47,7 +50,7 @@ class Summarizer:
         repo["kind"] = "issues"
         return repo, issues
 
-    async def get_project_issues(self, org, number, home_repo):
+    async def get_project_issues(self, org, number, home_repo=""):
         """
         Get issues from a project.
 
@@ -73,19 +76,19 @@ class Summarizer:
         project["kind"] = "issues"
         return project, issues
 
-    async def get_pull_requests(self, repo):
+    async def get_pull_requests(self, owner, name):
         """
         Get pull requests from a repo updated since a date, with comments since that date.
 
         Args:
-            repo (str): a combined owner/name of a repo, like "openedx/edx-platform".
+            owner (str): the owner of the repo.
+            name (str): the name of the repo.
         """
-        owner, name = repo.split("/")
         repo, pulls = await self.gql.nodes(
             query=build_query("repo_pull_requests.graphql"),
             path="repository.pullRequests",
             variables=dict(owner=owner, name=name),
-            donefn=(lambda nodes: nodes[-1]["updatedAt"] < SINCE),
+            donefn=(lambda nodes: nodes[-1]["updatedAt"] < self.since),
         )
         pulls = self._trim_since(pulls)
         for pull in pulls:
@@ -120,6 +123,17 @@ class Summarizer:
         repo["container_kind"] = "repo"
         repo["kind"] = "pull requests"
         return repo, pulls
+
+    def methods_from_url(self, url):
+        """Dispatch to a get_* method from a GitHub url."""
+        if (m := re.fullmatch(r"https://github.com/(.*?)/(.*?)/issues", url)):
+            return self.get_repo_issues, m[1], m[2]
+        elif (m := re.fullmatch(r"https://github.com/(.*?)/(.*?)/pulls", url)):
+            return self.get_pull_requests, m[1], m[2]
+        elif (m := re.fullmatch(r"https://github.com/orgs/(.*?)/projects/(\d+)", url)):
+            return self.get_project_issues, m[1], int(m[2])
+        else:
+            raise Exception(f"Can't understand URL {url!r}")
 
     def _trim_since(self, nodes):
         nodes = [n for n in nodes if n["updatedAt"] > self.since]
@@ -162,24 +176,17 @@ class Summarizer:
             iss["reasonMerged"] = bool(iss.get("mergedAt") and (iss["mergedAt"] > self.since))
 
 
-SINCE = "2022-02-15T00:00:00"
-
-# Issues in repos: arguments for get_repo_issues
-ISSUES = [
-    # ("nedbat/coveragepy",),
-    # ("openedx/tcril-engineering",),
-    # ("edx/open-source-process-wg",),
-]
-
-# Issues in projects: arguments for get_project_issues
-PROJECTS = [
-    ("edx", 7, "edx/open-source-process-wg"),
-    ("openedx", 8, "openedx/tcril-engineering"),
-]
-
-PULL_REQUESTS = [
-    ("openedx/open-edx-proposals",),
-]
+async def make_digest(since, items, digest):
+    since_date = datetime.datetime.now() - parse_timedelta(since)
+    summarizer = Summarizer(since=since_date)
+    tasks = [fn(*args) for fn, *args in map(summarizer.methods_from_url, items)]
+    results = await asyncio.gather(*tasks)
+    # $set_env.py: DIGEST_SAVE_RESULT - save digest data in a JSON file.
+    if int(os.environ.get("DIGEST_SAVE_RESULT", 0)):
+        await json_save(results, "out_digest.json")
+    html = render_jinja("digest.html.j2", results=results, since=since_date)
+    async with aiofiles.open(digest, "w", encoding="utf-8") as html_out:
+        await html_out.write(html)
 
 async def main():
     """
@@ -188,18 +195,9 @@ async def main():
     Writes digest.html
 
     """
-    summarizer = Summarizer(since=SINCE)
-    tasks = [
-        *(itertools.starmap(summarizer.get_repo_issues, ISSUES)),
-        *(itertools.starmap(summarizer.get_project_issues, PROJECTS)),
-        *(itertools.starmap(summarizer.get_pull_requests, PULL_REQUESTS)),
-    ]
-    results = await asyncio.gather(*tasks)
-    # $set_env.py: DIGEST_SAVE_RESULT - save digest data in a JSON file.
-    if int(os.environ.get("DIGEST_SAVE_RESULT", 0)):
-        await json_save(results, "out_digest.json")
-    html = render_jinja("digest.html.j2", results=results, since=SINCE)
-    async with aiofiles.open("digest.html", "w", encoding="utf-8") as html_out:
-        await html_out.write(html)
+    with open("dinghy.yaml", encoding="utf-8") as y:
+        config = yaml.safe_load(y)
+    tasks = [make_digest(**spec) for spec in config]
+    await asyncio.gather(*tasks)
 
 asyncio.run(main())
